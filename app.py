@@ -203,5 +203,8 @@ if __name__ == '__main__':
     # Run Flask app
     # Use 0.0.0.0 to allow access from network, port 5000
     # For production, consider using a different port or reverse proxy
-    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
+    # Use port 5001 on macOS (5000 is used by AirPlay), 5000 on Pi
+    import sys
+    port = 5001 if sys.platform == 'darwin' else 5000
+    app.run(host='0.0.0.0', port=port, debug=True, threaded=True)
 

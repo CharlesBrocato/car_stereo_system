@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Android Auto</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="android-auto-screen">
+    <div class="container">
+        <header>
+            <a href="/" class="back-button">← Back</a>
+            <h1>Android Auto</h1>
+        </header>
+        
+        <main class="android-auto-content">
+            <div class="status-card">
+                <div class="status-icon" id="auto-status-icon">📱</div>
+                <h2 id="auto-status-text">Android Auto Not Active</h2>
+                <p id="auto-status-desc">Connect your Android phone to use Android Auto</p>
+            </div>
+            
+            <div class="control-buttons">
+                <button id="start-auto-btn" class="btn-primary btn-large">Start Android Auto</button>
+                <button id="stop-auto-btn" class="btn-secondary btn-large" style="display: none;">Stop Android Auto</button>
+            </div>
+            
+            <div class="info-section">
+                <h3>Instructions</h3>
+                <ol>
+                    <li>Ensure your Android phone has Android Auto installed</li>
+                    <li>Connect your phone via USB or enable wireless Android Auto</li>
+                    <li>Click "Start Android Auto" above</li>
+                    <li>Follow on-screen prompts on your phone</li>
+                </ol>
+                <p class="note">
+                    <strong>Note:</strong> Full Android Auto functionality requires OpenAuto or similar software 
+                    to be installed on the Raspberry Pi. This interface provides basic control.
+                </p>
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/android_auto.js') }}"></script>
+</body>
+</html>
+

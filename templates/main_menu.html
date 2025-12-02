@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Car Stereo System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="main-menu">
+    <div class="container">
+        <header>
+            <h1>Car Stereo System</h1>
+            <div class="status-bar">
+                <span id="time"></span>
+                <span id="status-indicator"></span>
+            </div>
+        </header>
+        
+        <main class="menu-grid">
+            <a href="/music" class="menu-item music">
+                <div class="icon">🎵</div>
+                <h2>Music</h2>
+                <p>Bluetooth & Spotify</p>
+            </a>
+            
+            <a href="/map" class="menu-item map">
+                <div class="icon">🗺️</div>
+                <h2>Map</h2>
+                <p>Navigation</p>
+            </a>
+            
+            <a href="/android_auto" class="menu-item android-auto">
+                <div class="icon">📱</div>
+                <h2>Android Auto</h2>
+                <p>Phone Integration</p>
+            </a>
+            
+            <a href="/settings" class="menu-item settings">
+                <div class="icon">⚙️</div>
+                <h2>Settings</h2>
+                <p>System Configuration</p>
+            </a>
+        </main>
+        
+        <footer>
+            <div class="sensor-info">
+                <span id="temperature">--°C</span>
+                <span id="humidity">--%</span>
+            </div>
+        </footer>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
+

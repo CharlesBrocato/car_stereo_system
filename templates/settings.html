@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Settings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="settings-screen">
+    <div class="container">
+        <header>
+            <a href="/" class="back-button">← Back</a>
+            <h1>Settings</h1>
+        </header>
+        
+        <main class="settings-content">
+            <div class="settings-section">
+                <h2>Audio Settings</h2>
+                <div class="setting-item">
+                    <label>Default Volume</label>
+                    <input type="range" id="default-volume" min="0" max="100" value="50">
+                    <span id="default-volume-value">50%</span>
+                </div>
+                <div class="setting-item">
+                    <label>Audio Output</label>
+                    <select id="audio-output">
+                        <option value="bluetooth">Bluetooth</option>
+                        <option value="hdmi">HDMI</option>
+                        <option value="analog">Analog (3.5mm)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h2>Display Settings</h2>
+                <div class="setting-item">
+                    <label>Brightness</label>
+                    <input type="range" id="brightness" min="0" max="100" value="80">
+                    <span id="brightness-value">80%</span>
+                </div>
+                <div class="setting-item">
+                    <label>Screen Timeout</label>
+                    <select id="screen-timeout">
+                        <option value="never">Never</option>
+                        <option value="5">5 minutes</option>
+                        <option value="10">10 minutes</option>
+                        <option value="30">30 minutes</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h2>System Information</h2>
+                <div class="info-item">
+                    <span>Temperature:</span>
+                    <span id="sys-temp">--°C</span>
+                </div>
+                <div class="info-item">
+                    <span>Humidity:</span>
+                    <span id="sys-humidity">--%</span>
+                </div>
+                <div class="info-item">
+                    <span>Pressure:</span>
+                    <span id="sys-pressure">-- hPa</span>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <button id="save-settings-btn" class="btn-primary btn-large">Save Settings</button>
+                <button id="reset-settings-btn" class="btn-secondary">Reset to Defaults</button>
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+</body>
+</html>
+

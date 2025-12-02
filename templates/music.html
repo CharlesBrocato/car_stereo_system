@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Music Player</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="music-screen">
+    <div class="container">
+        <header>
+            <a href="/" class="back-button">← Back</a>
+            <h1>Music Player</h1>
+        </header>
+        
+        <main class="music-player">
+            <div class="now-playing">
+                <div class="album-art">
+                    <div class="placeholder-art">🎵</div>
+                </div>
+                <div class="track-info">
+                    <h2 id="track-title">No track playing</h2>
+                    <p id="track-artist">Connect a device to play music</p>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <button id="prev-btn" class="control-btn">⏮</button>
+                <button id="play-pause-btn" class="control-btn play-pause">▶</button>
+                <button id="next-btn" class="control-btn">⏭</button>
+            </div>
+            
+            <div class="volume-control">
+                <label>Volume</label>
+                <input type="range" id="volume-slider" min="0" max="100" value="50">
+                <span id="volume-value">50%</span>
+            </div>
+            
+            <div class="bluetooth-section">
+                <h3>Bluetooth Devices</h3>
+                <button id="scan-btn" class="btn-primary">Scan for Devices</button>
+                <div id="device-list" class="device-list"></div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/music.js') }}"></script>
+</body>
+</html>
+

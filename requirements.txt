@@ -1,0 +1,6 @@
+Flask==3.0.0
+sense-hat==2.2.0
+requests==2.31.0
+python-dotenv==1.0.0
+folium==0.15.0
+

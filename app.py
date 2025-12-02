@@ -180,7 +180,7 @@ def restart_carplay():
 @app.route('/api/carplay/key', methods=['POST'])
 def send_carplay_key():
     """Send navigation key to CarPlay"""
-    data = request.json
+    data = request.json or {}
     key = data.get('key', '')
     result = carplay.send_key(key)
     return jsonify(result)

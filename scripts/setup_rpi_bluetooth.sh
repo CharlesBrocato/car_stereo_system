@@ -30,13 +30,18 @@ sudo apt-get update
 
 echo ""
 echo "[2/5] Installing Bluetooth packages and tools..."
+# Core packages (required)
 sudo apt-get install -y \
     bluetooth \
     bluez \
-    bluez-tools \
     libbluetooth-dev \
     python3-dev \
     python3-venv
+
+# Optional: bluez-tools (not available on all Raspberry Pi OS versions)
+echo ""
+echo "  Attempting to install bluez-tools (optional)..."
+sudo apt-get install -y bluez-tools 2>/dev/null || echo "  Note: bluez-tools not available - this is OK, not required"
 
 echo ""
 echo "[3/5] Enabling Bluetooth service..."

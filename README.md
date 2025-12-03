@@ -197,12 +197,72 @@ car_stereo_system/
     └── images/
 ```
 
+## Cross-Platform Development
+
+This codebase runs on **both macOS (for development) and Raspberry Pi (for the car)**:
+
+| Platform | Bluetooth Backend | Setup Required |
+|----------|------------------|----------------|
+| macOS    | CoreBluetooth    | None (works automatically) |
+| Raspberry Pi / Linux | BlueZ | Run `scripts/setup_rpi_bluetooth.sh` |
+| Windows  | WinRT            | Usually works automatically |
+
+### Developing on macOS
+
+1. Clone the repo and create a virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. Run the Flask app:
+   ```bash
+   python3 app.py
+   ```
+
+3. Access at `http://localhost:5001` (macOS uses port 5001 to avoid AirPlay conflicts)
+
+4. Bluetooth scanning works automatically via CoreBluetooth - no extra setup needed.
+
+### Running on Raspberry Pi
+
+1. **Run the Bluetooth setup script** (first time only):
+   ```bash
+   chmod +x scripts/setup_rpi_bluetooth.sh
+   bash scripts/setup_rpi_bluetooth.sh
+   sudo reboot
+   ```
+
+2. **Verify Bluetooth is working**:
+   ```bash
+   bluetoothctl show      # Should list your adapter
+   bluetoothctl scan on   # Test scanning (Ctrl+C to stop)
+   ```
+
+3. **Create virtual environment and install dependencies**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+4. **Start the Flask app**:
+   ```bash
+   python3 app.py
+   # Or use the startup script:
+   ./start.sh
+   ```
+
+5. Access at `http://localhost:5000` or `http://<pi-ip>:5000`
+
 ## Development Notes
 
 - The application uses Flask for the web interface
 - All modules are designed to work in simulation mode if hardware is unavailable
 - The interface is optimized for touch screens (7" display)
 - Responsive design works on various screen sizes
+- Bluetooth uses the `bleak` library for cross-platform BLE support
 
 ## Future Enhancements
 

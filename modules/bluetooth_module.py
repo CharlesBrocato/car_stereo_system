@@ -2,10 +2,22 @@
 Bluetooth Module
 Handles Bluetooth LE scanning and connections using bleak library
 Cross-platform support for macOS, Linux (Raspberry Pi), and Windows
+
+Platform Notes:
+- macOS: Uses CoreBluetooth via bleak (no extra setup needed)
+- Linux/Raspberry Pi: Uses BlueZ via bleak (requires bluez package)
+- Windows: Uses WinRT via bleak (usually works out of the box)
 """
 
 import asyncio
+import platform
 import sys
+
+# Detect the operating system
+SYSTEM_NAME = platform.system().lower()
+IS_LINUX = SYSTEM_NAME == "linux"
+IS_MACOS = SYSTEM_NAME == "darwin"
+IS_WINDOWS = SYSTEM_NAME == "windows"
 
 # Import bleak for cross-platform Bluetooth LE
 try:
@@ -14,6 +26,9 @@ try:
 except ImportError:
     BLEAK_AVAILABLE = False
     print("Warning: bleak not installed. Bluetooth scanning will use mock data.")
+    print("  Install with: pip install bleak>=0.22.0")
+    if IS_LINUX:
+        print("  On Raspberry Pi, also run: bash scripts/setup_rpi_bluetooth.sh")
 
 
 class BluetoothManager:
@@ -62,12 +77,17 @@ class BluetoothManager:
             return []
     
     async def _async_scan(self, timeout):
-        """Async method to perform BLE scan with improved name detection."""
+        """
+        Async method to perform BLE scan with improved name detection.
+        Works on both macOS (CoreBluetooth) and Linux/Raspberry Pi (BlueZ).
+        """
         results = []
         seen_addresses = set()
         
         try:
-            print(f"Starting Bluetooth LE scan (timeout: {timeout}s)...")
+            backend_info = "CoreBluetooth" if IS_MACOS else ("BlueZ" if IS_LINUX else "WinRT")
+            print(f"Starting Bluetooth LE scan on {SYSTEM_NAME} ({backend_info})...")
+            print(f"  Scan timeout: {timeout}s")
             
             # Use return_adv=True to get advertisement data with more device info
             discovered = await BleakScanner.discover(timeout=timeout, return_adv=True)

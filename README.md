@@ -255,6 +255,25 @@ This codebase runs on **both macOS (for development) and Raspberry Pi (for the c
 
 ### Running on Raspberry Pi
 
+**Recommended: Use the full setup script:**
+```bash
+cd ~/car_stereo_system
+bash fix_rpi_environment.sh
+sudo reboot
+```
+
+This script handles everything: system dependencies, Bluetooth, Python venv, and all packages.
+
+**If you have dependency errors, do a clean reinstall:**
+```bash
+cd ~/car_stereo_system
+rm -rf venv
+bash fix_rpi_environment.sh
+sudo reboot
+```
+
+**Manual setup (alternative):**
+
 1. **Run the Bluetooth setup script** (first time only):
    ```bash
    chmod +x scripts/setup_rpi_bluetooth.sh

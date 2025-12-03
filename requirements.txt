@@ -1,9 +1,24 @@
-Flask==3.0.0
-sense-hat==2.2.0
-requests==2.31.0
-python-dotenv==1.0.0
-folium==0.15.0
-geopy==2.4.1
+# Core Flask application
+Flask>=3.0.0
+Jinja2>=3.0.0
+Werkzeug>=3.0.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Environment configuration
+python-dotenv>=1.0.0
+
+# Map and navigation
+folium>=0.15.0
+geopy>=2.4.1
+
+# SSL certificates (for geocoding on macOS)
 certifi>=2023.0.0
+
+# Bluetooth Low Energy (cross-platform)
 bleak>=0.22.0
+
+# Sense HAT (Raspberry Pi only - will fail gracefully on other platforms)
+# sense-hat>=2.2.0
 

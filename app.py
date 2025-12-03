@@ -10,6 +10,42 @@ import time
 import os
 import subprocess
 import platform
+
+# =============================================================================
+# Check for optional dependencies and warn if missing
+# =============================================================================
+
+# Check for folium (map features)
+try:
+    import folium
+    FOLIUM_AVAILABLE = True
+except ImportError:
+    FOLIUM_AVAILABLE = False
+    print("Warning: folium is not installed. Map features may not work.")
+    print("  Install with: pip install folium>=0.15.0")
+
+# Check for bleak (Bluetooth LE)
+try:
+    import bleak
+    BLEAK_AVAILABLE = True
+except ImportError:
+    BLEAK_AVAILABLE = False
+    print("Warning: bleak is not installed. Bluetooth scanning will use mock data.")
+    print("  Install with: pip install bleak>=0.22.0")
+
+# Check for geopy (geocoding)
+try:
+    import geopy
+    GEOPY_AVAILABLE = True
+except ImportError:
+    GEOPY_AVAILABLE = False
+    print("Warning: geopy is not installed. Address geocoding will not work.")
+    print("  Install with: pip install geopy>=2.4.1")
+
+# =============================================================================
+# Import application modules
+# =============================================================================
+
 from modules.sense_hat_module import SenseHATManager
 from modules.bluetooth_module import BluetoothManager
 from modules.music_module import MusicManager

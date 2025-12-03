@@ -206,9 +206,9 @@ fi
 echo "Activating virtual environment..."
 source venv/bin/activate
 
-# Upgrade pip
-echo "Upgrading pip..."
-pip install --upgrade pip
+# Upgrade pip, setuptools, and wheel first
+echo "Upgrading pip, setuptools, and wheel..."
+pip install --upgrade pip setuptools wheel
 
 print_success "Virtual environment ready"
 
@@ -220,31 +220,27 @@ print_header "Step 4/8: Installing Python Dependencies"
 # Install from requirements.txt first
 if [[ -f "requirements.txt" ]]; then
     echo "Installing from requirements.txt..."
-    pip install -r requirements.txt
+    pip install -r requirements.txt || print_warning "Some packages from requirements.txt failed"
 fi
 
-# Install/upgrade specific required packages
+# Install/upgrade specific required packages (ensures all core packages are present)
 echo ""
 echo "Installing/upgrading core packages..."
 pip install --upgrade \
     flask>=3.0.0 \
+    Jinja2>=3.0.0 \
+    Werkzeug>=3.0.0 \
     requests \
     geopy>=2.4.1 \
     bleak>=0.22.0 \
     certifi \
     python-dotenv \
-    folium
+    folium>=0.15.0
 
 # Install PyBluez for Linux (optional, provides additional Bluetooth features)
 echo ""
 echo "Attempting to install PyBluez (Linux Bluetooth)..."
 pip install pybluez 2>/dev/null || print_warning "PyBluez installation failed - this is OK, bleak will be used"
-
-# Regenerate requirements.txt with all installed packages
-echo ""
-echo "Regenerating requirements.txt..."
-pip freeze > requirements.txt
-print_success "requirements.txt updated"
 
 print_success "Python dependencies installed"
 

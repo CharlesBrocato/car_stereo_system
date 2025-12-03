@@ -289,8 +289,8 @@ class BluetoothManager:
             
             if client.is_connected:
                 self.connected_client = client
-            self.connected_device = device_address
-            self.is_connected_flag = True
+                self.connected_device = device_address
+                self.is_connected_flag = True
                 return True
             return False
         except Exception as e:

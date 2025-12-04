@@ -2,6 +2,7 @@
 #
 # FastCarPlay Build Script for Raspberry Pi 5 (ARM64)
 # Builds the CarPlay/Android Auto receiver engine
+# Requires: Raspberry Pi OS Bookworm (64-bit)
 #
 
 set -e
@@ -12,8 +13,29 @@ CONF_DIR="$CARPLAY_DIR/conf"
 
 echo "╔═══════════════════════════════════════════════════════════════╗"
 echo "║       FastCarPlay Build Script for Raspberry Pi 5             ║"
+echo "║       Raspberry Pi OS Bookworm (64-bit) Required              ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 echo ""
+
+# Check architecture - must be arm64
+check_architecture() {
+    ARCH=$(dpkg --print-architecture 2>/dev/null || echo "unknown")
+    echo "🖥️  Detected architecture: $ARCH"
+    
+    if [ "$ARCH" != "arm64" ]; then
+        echo ""
+        echo "❌ ERROR: This script requires 64-bit ARM (arm64) architecture."
+        echo "   Detected: $ARCH"
+        echo ""
+        echo "   This script is designed for Raspberry Pi OS Bookworm (64-bit)."
+        echo "   Please use the 64-bit version of Raspberry Pi OS."
+        echo ""
+        exit 1
+    fi
+    
+    echo "✅ Architecture check passed (arm64)"
+    echo ""
+}
 
 # Check if running on Raspberry Pi
 check_platform() {
@@ -27,34 +49,36 @@ check_platform() {
     echo ""
 }
 
-# Install dependencies
+# Install dependencies for Raspberry Pi OS Bookworm (64-bit)
 install_dependencies() {
-    echo "📦 Installing build dependencies..."
+    echo "📦 Installing build dependencies for Bookworm (arm64)..."
     echo "   This may take a few minutes on first run..."
     echo ""
     
-    sudo apt update
+    sudo apt-get update
     
-    # Build dependencies
-    sudo apt install -y \
+    # Build and runtime dependencies for Bookworm arm64
+    # NOTE: Do NOT use :armhf packages on 64-bit systems
+    sudo apt-get install -y \
+        cmake \
         build-essential \
-        xxd \
+        pkg-config \
+        vim-common \
         libsdl2-dev \
         libsdl2-ttf-dev \
-        libavformat-dev \
-        libavcodec-dev \
-        libavutil-dev \
-        libswscale-dev \
         libusb-1.0-0-dev \
-        libssl-dev
+        libavcodec-dev \
+        libavformat-dev \
+        libswscale-dev \
+        libavutil-dev \
+        libcurl4-openssl-dev
     
-    # Runtime dependencies
-    sudo apt install -y \
+    # Optional runtime dependencies
+    sudo apt-get install -y \
         ffmpeg \
         libsdl2-2.0-0 \
         libsdl2-ttf-2.0-0 \
-        libusb-1.0-0 \
-        libssl3
+        libusb-1.0-0 || echo "   Some optional packages may not be available, continuing..."
     
     echo ""
     echo "✅ Dependencies installed successfully"
@@ -231,6 +255,13 @@ print_instructions() {
 
 # Main execution
 main() {
+    # Architecture check first (unless skipped)
+    if [ "$1" != "--skip-arch-check" ]; then
+        check_architecture
+    else
+        shift  # Remove the flag from arguments
+    fi
+    
     check_platform
     
     # Parse arguments

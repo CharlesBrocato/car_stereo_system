@@ -11,6 +11,40 @@ import os
 import subprocess
 import platform
 import shutil
+import socket
+
+# =============================================================================
+# Runtime IP Detection (for LAN access from iPhone/etc)
+# =============================================================================
+
+def get_runtime_ip():
+    """
+    Get the LAN IP address for this system.
+    Priority: Environment variable > Auto-detect > localhost
+    """
+    # Check if set by startup script
+    env_ip = os.environ.get("CAR_STEREO_LAN_IP")
+    if env_ip and env_ip != "localhost":
+        return env_ip
+    
+    # Auto-detect LAN IP
+    try:
+        # Connect to external address to determine local IP (doesn't actually send data)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.5)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        pass
+    
+    # Fallback
+    return "localhost"
+
+def get_runtime_port():
+    """Get the port number for the Flask server."""
+    return os.environ.get("CAR_STEREO_PORT", "5000")
 
 # CORS support for iPhone Safari GPS bridge
 try:
@@ -118,7 +152,9 @@ def ios_bridge():
     Web-based GPS bridge for iPhone.
     Open this page on the iPhone's Safari browser to share location with the car stereo.
     """
-    return render_template('ios_bridge.html')
+    return render_template('ios_bridge.html',
+                           lan_ip=get_runtime_ip(),
+                           base_url=request.host_url.rstrip('/'))
 
 @app.route('/music')
 def music_screen():

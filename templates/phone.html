@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Phone - Car Stereo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            transition: background 0.2s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        h1 {
+            font-size: 2em;
+            margin: 0 0 30px 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .status-box {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .status-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #e74c3c;
+            transition: all 0.3s;
+        }
+        
+        .status-dot.connected {
+            background: #2ecc71;
+            box-shadow: 0 0 15px rgba(46, 204, 113, 0.5);
+        }
+        
+        .status-dot.ringing {
+            background: #f39c12;
+            animation: pulse-ring 0.5s infinite alternate;
+        }
+        
+        .status-dot.active {
+            background: #3498db;
+            animation: pulse-active 1s infinite;
+        }
+        
+        @keyframes pulse-ring {
+            from { transform: scale(1); box-shadow: 0 0 10px rgba(243, 156, 18, 0.5); }
+            to { transform: scale(1.2); box-shadow: 0 0 25px rgba(243, 156, 18, 0.8); }
+        }
+        
+        @keyframes pulse-active {
+            0%, 100% { box-shadow: 0 0 10px rgba(52, 152, 219, 0.5); }
+            50% { box-shadow: 0 0 25px rgba(52, 152, 219, 0.8); }
+        }
+        
+        .status-text {
+            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .device-name {
+            font-size: 0.9em;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 5px;
+        }
+        
+        .call-box {
+            background: linear-gradient(135deg, rgba(52, 152, 219, 0.3), rgba(155, 89, 182, 0.3));
+            border: 2px solid rgba(52, 152, 219, 0.5);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .call-box.incoming {
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.3), rgba(231, 76, 60, 0.3));
+            border-color: rgba(243, 156, 18, 0.5);
+            animation: ring-pulse 1s infinite;
+        }
+        
+        .call-box.active {
+            background: linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.3));
+            border-color: rgba(46, 204, 113, 0.5);
+        }
+        
+        @keyframes ring-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        
+        .caller-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+        
+        .caller-name {
+            font-size: 1.8em;
+            font-weight: 600;
+            margin: 0 0 10px 0;
+        }
+        
+        .caller-number {
+            font-size: 1.2em;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0 0 10px 0;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        
+        .call-state {
+            font-size: 1em;
+            color: rgba(255, 255, 255, 0.6);
+            margin: 0 0 25px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .call-duration {
+            font-size: 2em;
+            font-weight: 300;
+            font-family: 'SF Mono', Monaco, monospace;
+            margin-bottom: 25px;
+            color: #2ecc71;
+        }
+        
+        .call-actions {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .call-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            font-size: 2em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .call-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .call-btn.answer {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            box-shadow: 0 5px 20px rgba(46, 204, 113, 0.4);
+        }
+        
+        .call-btn.answer:hover {
+            box-shadow: 0 8px 30px rgba(46, 204, 113, 0.6);
+        }
+        
+        .call-btn.hangup {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            box-shadow: 0 5px 20px rgba(231, 76, 60, 0.4);
+        }
+        
+        .call-btn.hangup:hover {
+            box-shadow: 0 8px 30px rgba(231, 76, 60, 0.6);
+        }
+        
+        .call-btn.mute {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .call-btn.mute.active {
+            background: #e74c3c;
+        }
+        
+        .dialpad {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .dial-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: none;
+            border-radius: 15px;
+            padding: 20px;
+            font-size: 1.8em;
+            color: white;
+            text-align: center;
+            font-family: 'SF Mono', Monaco, monospace;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+        }
+        
+        .dial-input::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .dialpad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .dial-key {
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            border-radius: 15px;
+            padding: 20px;
+            font-size: 1.5em;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+        
+        .dial-key:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+        
+        .dial-key:active {
+            transform: scale(0.95);
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .dial-key small {
+            display: block;
+            font-size: 0.5em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 2px;
+        }
+        
+        .dial-actions {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        
+        .recent-calls {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 20px;
+        }
+        
+        .recent-calls h3 {
+            margin: 0 0 15px 0;
+            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .call-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .call-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .call-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .call-item-icon {
+            font-size: 1.5em;
+            margin-right: 15px;
+        }
+        
+        .call-item-info {
+            flex: 1;
+        }
+        
+        .call-item-name {
+            font-weight: 500;
+            margin-bottom: 3px;
+        }
+        
+        .call-item-time {
+            font-size: 0.85em;
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .call-item-type {
+            font-size: 0.8em;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+        
+        .call-item-type.incoming {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+        
+        .call-item-type.outgoing {
+            background: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+        }
+        
+        .call-item-type.missed {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+        
+        .no-connection {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .no-connection .icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+        
+        .no-connection p {
+            margin: 10px 0;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Back</a>
+        
+        <h1>📞 Phone</h1>
+        
+        <!-- Connection Status -->
+        <div class="status-box">
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+                <span class="status-text" id="statusText">Checking connection...</span>
+            </div>
+            <div class="device-name" id="deviceName"></div>
+        </div>
+        
+        <!-- Active Call Box (hidden by default) -->
+        <div class="call-box hidden" id="callBox">
+            <div class="caller-icon" id="callerIcon">📱</div>
+            <h2 class="caller-name" id="callerName">Unknown Caller</h2>
+            <p class="caller-number" id="callerNumber"></p>
+            <p class="call-state" id="callState">Incoming Call</p>
+            <div class="call-duration hidden" id="callDuration">00:00</div>
+            
+            <div class="call-actions" id="callActions">
+                <button class="call-btn answer" id="answerBtn" onclick="answerCall()">📞</button>
+                <button class="call-btn hangup" id="hangupBtn" onclick="hangupCall()">📵</button>
+            </div>
+        </div>
+        
+        <!-- Dialpad (shown when no active call) -->
+        <div class="dialpad" id="dialpad">
+            <input type="tel" class="dial-input" id="dialInput" placeholder="Enter number" readonly>
+            
+            <div class="dialpad-grid">
+                <button class="dial-key" onclick="dialKey('1')">1</button>
+                <button class="dial-key" onclick="dialKey('2')">2<small>ABC</small></button>
+                <button class="dial-key" onclick="dialKey('3')">3<small>DEF</small></button>
+                <button class="dial-key" onclick="dialKey('4')">4<small>GHI</small></button>
+                <button class="dial-key" onclick="dialKey('5')">5<small>JKL</small></button>
+                <button class="dial-key" onclick="dialKey('6')">6<small>MNO</small></button>
+                <button class="dial-key" onclick="dialKey('7')">7<small>PQRS</small></button>
+                <button class="dial-key" onclick="dialKey('8')">8<small>TUV</small></button>
+                <button class="dial-key" onclick="dialKey('9')">9<small>WXYZ</small></button>
+                <button class="dial-key" onclick="dialKey('*')">*</button>
+                <button class="dial-key" onclick="dialKey('0')">0<small>+</small></button>
+                <button class="dial-key" onclick="dialKey('#')">#</button>
+            </div>
+            
+            <div class="dial-actions">
+                <button class="call-btn hangup" onclick="clearDial()" style="width: 60px; height: 60px; font-size: 1.5em;">⌫</button>
+                <button class="call-btn answer" onclick="makeCall()" style="width: 60px; height: 60px; font-size: 1.5em;">📞</button>
+            </div>
+        </div>
+        
+        <!-- Recent Calls -->
+        <div class="recent-calls" id="recentCalls">
+            <h3>📋 Recent Calls</h3>
+            <ul class="call-list" id="callList">
+                <li class="call-item" onclick="dialNumber('+1234567890')">
+                    <span class="call-item-icon">👤</span>
+                    <div class="call-item-info">
+                        <div class="call-item-name">No recent calls</div>
+                        <div class="call-item-time">Connect your phone via Bluetooth</div>
+                    </div>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- No Connection Message -->
+        <div class="no-connection hidden" id="noConnection">
+            <div class="icon">📵</div>
+            <h3>No Phone Connected</h3>
+            <p>Connect your phone via Bluetooth to make and receive calls.</p>
+            <p><small>Go to Settings → Bluetooth to pair your phone</small></p>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/phone.js') }}"></script>
+</body>
+</html>
+

@@ -4,7 +4,7 @@ Car Stereo System - Main Application
 Raspberry Pi 5 with Sense HAT and 7" Touch Screen
 """
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
 import threading
 import time
 import os
@@ -12,6 +12,7 @@ import subprocess
 import platform
 import shutil
 import socket
+import json
 
 # =============================================================================
 # Runtime IP Detection (for LAN access from iPhone/etc)
@@ -104,6 +105,15 @@ from modules.music_module import MusicManager
 from modules.map_module import MapManager
 from modules.android_auto_module import AndroidAutoManager
 
+# Import Phone Manager for HFP (Hands-Free Profile)
+try:
+    from modules.phone_manager import phone_manager
+    PHONE_MANAGER_AVAILABLE = True
+except ImportError as e:
+    PHONE_MANAGER_AVAILABLE = False
+    phone_manager = None
+    print(f"Warning: Phone manager not available: {e}")
+
 # Import BlueZ native media control (preferred over playerctl)
 try:
     from modules.bluetooth_media import (
@@ -175,6 +185,11 @@ def android_auto_screen():
 def settings_screen():
     """Settings screen"""
     return render_template('settings.html')
+
+@app.route('/phone')
+def phone_screen():
+    """Phone/Bluetooth Calls screen"""
+    return render_template('phone.html')
 
 # API endpoints for system control
 @app.route('/api/status')
@@ -811,6 +826,110 @@ def stop_android_auto():
     result = android_auto.stop()
     return jsonify(result)
 
+# =============================================================================
+# Phone API Endpoints (Bluetooth HFP)
+# =============================================================================
+
+@app.route('/api/phone/status')
+def phone_status():
+    """Get current phone connection and call status"""
+    if not PHONE_MANAGER_AVAILABLE or not phone_manager:
+        return jsonify({
+            "connected": False,
+            "device": None,
+            "device_name": None,
+            "call_state": "idle",
+            "caller_id": None,
+            "caller_name": None,
+            "message": "Phone manager not available"
+        })
+    
+    return jsonify(phone_manager.get_status())
+
+@app.route('/api/phone/events')
+def phone_events():
+    """
+    Server-Sent Events endpoint for real-time phone updates.
+    Client should connect via EventSource.
+    """
+    def generate():
+        if not PHONE_MANAGER_AVAILABLE or not phone_manager:
+            yield f"data: {json.dumps({'error': 'Phone manager not available'})}\n\n"
+            return
+        
+        # Send initial status
+        yield f"data: {json.dumps(phone_manager.get_status())}\n\n"
+        
+        # Stream updates
+        while True:
+            try:
+                # Wait for event with timeout
+                data = phone_manager.event_queue.get(timeout=30)
+                yield f"data: {json.dumps(data)}\n\n"
+            except:
+                # Send heartbeat to keep connection alive
+                yield f"data: {json.dumps({'heartbeat': True})}\n\n"
+    
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        }
+    )
+
+@app.route('/api/phone/answer', methods=['POST'])
+def phone_answer():
+    """Answer incoming call"""
+    if not PHONE_MANAGER_AVAILABLE or not phone_manager:
+        return jsonify({"success": False, "message": "Phone manager not available"})
+    
+    result = phone_manager.answer_call()
+    return jsonify(result)
+
+@app.route('/api/phone/hangup', methods=['POST'])
+def phone_hangup():
+    """Hang up current call"""
+    if not PHONE_MANAGER_AVAILABLE or not phone_manager:
+        return jsonify({"success": False, "message": "Phone manager not available"})
+    
+    result = phone_manager.hangup_call()
+    return jsonify(result)
+
+@app.route('/api/phone/dial', methods=['POST'])
+def phone_dial():
+    """Dial a phone number"""
+    if not PHONE_MANAGER_AVAILABLE or not phone_manager:
+        return jsonify({"success": False, "message": "Phone manager not available"})
+    
+    data = request.json or {}
+    number = data.get('number', '')
+    
+    result = phone_manager.dial_number(number)
+    return jsonify(result)
+
+@app.route('/api/phone/dtmf', methods=['POST'])
+def phone_dtmf():
+    """Send DTMF tone during active call"""
+    if not PHONE_MANAGER_AVAILABLE or not phone_manager:
+        return jsonify({"success": False, "message": "Phone manager not available"})
+    
+    data = request.json or {}
+    digit = data.get('digit', '')
+    
+    result = phone_manager.send_dtmf(digit)
+    return jsonify(result)
+
+@app.route('/api/phone/recent')
+def phone_recent():
+    """Get recent call history"""
+    if not PHONE_MANAGER_AVAILABLE or not phone_manager:
+        return jsonify({"ok": False, "calls": [], "message": "Phone manager not available"})
+    
+    return jsonify(phone_manager.get_recent_calls())
+
 def update_sense_hat_display():
     """Background thread to update Sense HAT display"""
     while True:
@@ -825,6 +944,10 @@ if __name__ == '__main__':
     # Start Sense HAT update thread
     sense_hat_thread = threading.Thread(target=update_sense_hat_display, daemon=True)
     sense_hat_thread.start()
+    
+    # Start Phone Manager (for Bluetooth HFP)
+    if PHONE_MANAGER_AVAILABLE and phone_manager:
+        phone_manager.start()
     
     # Run Flask app
     # Use 0.0.0.0 to allow access from network, port 5000

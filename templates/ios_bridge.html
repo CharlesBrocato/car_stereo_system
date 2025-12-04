@@ -317,7 +317,7 @@
             </div>
         </div>
         
-        <button class="btn" id="toggleBtn" onclick="toggleTracking()">
+        <button class="btn" id="startBtn">
             🚀 Start Sharing
         </button>
         
@@ -344,248 +344,183 @@
     </div>
     
     <script>
-        // Configuration
-        const API_BASE = window.location.origin;
-        const POST_INTERVAL = 2000; // Post every 2 seconds (more stable for Safari)
-        
         // State
-        let isTracking = false;
-        let watchId = null;
-        let updateCount = 0;
-        let lastPostTime = 0;
-        let consecutiveErrors = 0;
+        var watchId = null;
+        var updateCount = 0;
+        var isTracking = false;
         
-        // DOM elements
-        const iconEmoji = document.getElementById('iconEmoji');
-        const pageTitle = document.getElementById('pageTitle');
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const locationInfo = document.getElementById('locationInfo');
-        const coordsDisplay = document.getElementById('coordsDisplay');
-        const accuracyDisplay = document.getElementById('accuracyDisplay');
-        const updateCountEl = document.getElementById('updateCount');
-        const lastUpdateEl = document.getElementById('lastUpdate');
-        const toggleBtn = document.getElementById('toggleBtn');
-        const errorMsg = document.getElementById('errorMsg');
-        const deviceWarning = document.getElementById('deviceWarning');
-        const permissionHelp = document.getElementById('permissionHelp');
-        const serverUrl = document.getElementById('serverUrl');
-        
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            // Show server URL
-            serverUrl.textContent = window.location.host;
+        // Show server URL on load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('serverUrl').textContent = window.location.host;
             
-            // Detect device
-            detectDevice();
-            
-            // Check if geolocation is available
-            if (!navigator.geolocation) {
-                showError('Geolocation is not supported by your browser');
-                toggleBtn.disabled = true;
+            // Device detection
+            var ua = navigator.userAgent.toLowerCase();
+            var isIOS = /iphone|ipad|ipod/.test(ua);
+            if (!isIOS) {
+                var warn = document.getElementById('deviceWarning');
+                warn.classList.remove('hidden');
+                warn.innerHTML = '⚠️ For best results, open this page on your iPhone.<br><small>URL: <code>http://' + window.location.host + '/ios_bridge</code></small>';
             }
         });
         
-        function detectDevice() {
-            const ua = navigator.userAgent.toLowerCase();
-            const isIOS = /iphone|ipad|ipod/.test(ua);
-            const isSafari = /safari/.test(ua) && !/chrome/.test(ua);
+        // CRITICAL: Attach click handler directly to button
+        // Safari REQUIRES geolocation call to happen synchronously in click event
+        document.getElementById("startBtn").addEventListener("click", function() {
+            console.log("Start Sharing clicked");
             
-            if (!isIOS) {
-                deviceWarning.classList.remove('hidden');
-                deviceWarning.innerHTML = `⚠️ For best results, open this page on your iPhone.<br>
-                    <small>URL: <code>http://${window.location.host}/ios_bridge</code></small>`;
-            } else if (!isSafari) {
-                deviceWarning.classList.remove('hidden');
-                deviceWarning.textContent = '⚠️ Please open this page in Safari for best location accuracy.';
-            }
-        }
-        
-        function toggleTracking() {
-            if (isTracking) {
-                stopTracking();
-            } else {
-                startTracking();
-            }
-        }
-        
-        function startTracking() {
-            hideError();
-            permissionHelp.classList.add('hidden');
-            statusText.textContent = 'Requesting location...';
-            statusDot.classList.add('warning');
-            toggleBtn.disabled = true;
+            var btn = document.getElementById("startBtn");
+            var statusDot = document.getElementById("statusDot");
+            var statusText = document.getElementById("statusText");
+            var locationInfo = document.getElementById("locationInfo");
+            var coordsDisplay = document.getElementById("coordsDisplay");
+            var accuracyDisplay = document.getElementById("accuracyDisplay");
+            var updateCountEl = document.getElementById("updateCount");
+            var lastUpdateEl = document.getElementById("lastUpdate");
+            var errorMsg = document.getElementById("errorMsg");
+            var permissionHelp = document.getElementById("permissionHelp");
+            var iconEmoji = document.getElementById("iconEmoji");
             
-            // Safari-optimized geolocation options
-            const geoOptions = {
-                enableHighAccuracy: true,
-                timeout: 15000,        // 15 second timeout
-                maximumAge: 0          // Always get fresh location
-            };
-            
-            // CRITICAL: Safari requires geolocation permission request to happen
-            // SYNCHRONOUSLY inside the direct click handler. Any async wrapper
-            // (Promises, setTimeout, fetch callbacks) will cause Safari to block
-            // the permission popup silently.
-            
-            if (!navigator.geolocation) {
-                showError('Geolocation is not supported by your browser');
-                toggleBtn.disabled = false;
+            // If already tracking, stop
+            if (isTracking && watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                isTracking = false;
+                btn.textContent = "🚀 Start Sharing";
+                btn.classList.remove("stop", "active");
+                statusDot.classList.remove("active", "warning");
+                statusText.textContent = "Stopped";
+                iconEmoji.classList.remove("active");
                 return;
             }
             
-            // Request permission IMMEDIATELY (synchronous call in click handler)
+            // Check for geolocation support
+            if (!navigator.geolocation) {
+                alert("Geolocation not supported.");
+                errorMsg.textContent = "Geolocation not supported by your browser";
+                errorMsg.classList.remove("hidden");
+                return;
+            }
+            
+            // Update UI
+            statusText.textContent = "Requesting location...";
+            statusDot.classList.add("warning");
+            errorMsg.classList.add("hidden");
+            permissionHelp.classList.add("hidden");
+            
+            // FORCE Safari to show permission popup by calling getCurrentPosition
+            // DIRECTLY in click handler (no async, no Promise, no setTimeout)
             navigator.geolocation.getCurrentPosition(
-                function onPermissionGranted(position) {
-                    // Permission was granted - process first location
-                    console.log("✅ Location permission granted", position.coords);
-                    onLocationSuccess(position);
+                function(pos) {
+                    console.log("Initial permission granted", pos);
                     
-                    // NOW we can safely start watchPosition for continuous updates
+                    // Update UI with first position
+                    var lat = pos.coords.latitude;
+                    var lon = pos.coords.longitude;
+                    var accuracy = pos.coords.accuracy;
+                    
+                    statusDot.classList.remove("warning");
+                    statusDot.classList.add("active");
+                    statusText.textContent = "Streaming GPS";
+                    iconEmoji.classList.add("active");
+                    locationInfo.style.display = "block";
+                    coordsDisplay.textContent = lat.toFixed(6) + ", " + lon.toFixed(6);
+                    accuracyDisplay.textContent = "Accuracy: ±" + accuracy.toFixed(0) + "m";
+                    
+                    // Send first location
+                    fetch("/api/phone/location", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            lat: lat,
+                            lon: lon,
+                            accuracy: accuracy,
+                            timestamp: new Date().toISOString(),
+                            device: "iphone_safari"
+                        })
+                    }).then(function(resp) {
+                        if (resp.ok) {
+                            updateCount++;
+                            updateCountEl.textContent = updateCount;
+                            lastUpdateEl.textContent = new Date().toLocaleTimeString();
+                        }
+                    }).catch(function(err) {
+                        console.error("Network error:", err);
+                    });
+                    
+                    // Start continuous updates AFTER permission granted
                     watchId = navigator.geolocation.watchPosition(
-                        onLocationSuccess,
-                        onLocationError,
-                        geoOptions
+                        function(position) {
+                            var lat = position.coords.latitude;
+                            var lon = position.coords.longitude;
+                            var accuracy = position.coords.accuracy;
+                            
+                            // Update UI
+                            coordsDisplay.textContent = lat.toFixed(6) + ", " + lon.toFixed(6);
+                            accuracyDisplay.textContent = "Accuracy: ±" + accuracy.toFixed(0) + "m";
+                            statusDot.classList.add("active");
+                            statusText.textContent = "Streaming GPS";
+                            
+                            // Post to server
+                            fetch("/api/phone/location", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    lat: lat,
+                                    lon: lon,
+                                    accuracy: accuracy,
+                                    timestamp: new Date().toISOString(),
+                                    device: "iphone_safari"
+                                })
+                            }).then(function(resp) {
+                                if (resp.ok) {
+                                    updateCount++;
+                                    updateCountEl.textContent = updateCount;
+                                    lastUpdateEl.textContent = new Date().toLocaleTimeString();
+                                }
+                            }).catch(function(err) {
+                                console.error("Network error:", err);
+                            });
+                        },
+                        function(error) {
+                            console.error("WatchPosition error:", error);
+                            statusDot.classList.remove("active");
+                            statusDot.classList.add("warning");
+                            statusText.textContent = "GPS Error";
+                        },
+                        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
                     );
                     
                     isTracking = true;
-                    toggleBtn.disabled = false;
-                    toggleBtn.textContent = '⏹️ Stop Sharing';
-                    toggleBtn.classList.add('stop');
-                    toggleBtn.classList.remove('active');
+                    btn.textContent = "⏹️ Stop Sharing";
+                    btn.classList.add("stop");
+                    btn.classList.add("active");
                 },
-                function onPermissionDenied(error) {
-                    // Permission denied or error occurred
-                    console.error("❌ Location permission error", error);
-                    onLocationError(error);
-                    toggleBtn.disabled = false;
-                    statusDot.classList.remove('warning');
+                function(err) {
+                    console.log("Initial geolocation error:", err);
+                    statusDot.classList.remove("warning");
+                    statusText.textContent = "Permission Denied";
+                    
+                    var msg = "";
+                    switch(err.code) {
+                        case err.PERMISSION_DENIED:
+                            msg = "🚫 Location permission denied.";
+                            permissionHelp.classList.remove("hidden");
+                            break;
+                        case err.POSITION_UNAVAILABLE:
+                            msg = "📡 Location unavailable. Enable Location Services.";
+                            break;
+                        case err.TIMEOUT:
+                            msg = "⏱️ Location request timed out.";
+                            break;
+                        default:
+                            msg = "❌ Location error: " + err.message;
+                    }
+                    errorMsg.textContent = msg;
+                    errorMsg.classList.remove("hidden");
                 },
-                geoOptions  // Same options for the initial permission request
+                { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
             );
-        }
-        
-        function stopTracking() {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
-            }
-            
-            isTracking = false;
-            statusDot.classList.remove('active', 'warning');
-            statusText.textContent = 'Stopped';
-            iconEmoji.classList.remove('active');
-            toggleBtn.textContent = '🚀 Start Sharing';
-            toggleBtn.classList.remove('stop', 'active');
-        }
-        
-        function onLocationSuccess(position) {
-            const { latitude, longitude, accuracy } = position.coords;
-            
-            // Reset error count on success
-            consecutiveErrors = 0;
-            hideError();
-            permissionHelp.classList.add('hidden');
-            
-            // Update UI
-            statusDot.classList.remove('warning');
-            statusDot.classList.add('active');
-            statusText.textContent = 'Streaming GPS';
-            iconEmoji.classList.add('active');
-            toggleBtn.classList.add('active');
-            locationInfo.style.display = 'block';
-            coordsDisplay.textContent = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-            accuracyDisplay.textContent = `Accuracy: ±${accuracy.toFixed(0)}m`;
-            
-            // Throttle posts to server
-            const now = Date.now();
-            if (now - lastPostTime >= POST_INTERVAL) {
-                postLocation(latitude, longitude, accuracy);
-                lastPostTime = now;
-            }
-        }
-        
-        function onLocationError(error) {
-            consecutiveErrors++;
-            
-            let message;
-            let showPermissionHelp = false;
-            
-            switch (error.code) {
-                case error.PERMISSION_DENIED:
-                    message = '🚫 Location permission denied.';
-                    showPermissionHelp = true;
-                    stopTracking();
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    message = '📡 Location unavailable. Ensure Location Services are ON.';
-                    break;
-                case error.TIMEOUT:
-                    if (consecutiveErrors < 3) {
-                        // Don't show error for occasional timeouts
-                        statusText.textContent = 'Locating...';
-                        statusDot.classList.add('warning');
-                        return;
-                    }
-                    message = '⏱️ Location request timed out. Move to an area with better GPS signal.';
-                    break;
-                default:
-                    message = '❌ Location error: ' + error.message;
-            }
-            
-            showError(message);
-            statusText.textContent = 'Error';
-            statusDot.classList.remove('active');
-            statusDot.classList.add('warning');
-            
-            if (showPermissionHelp) {
-                permissionHelp.classList.remove('hidden');
-            }
-        }
-        
-        async function postLocation(lat, lon, accuracy) {
-            try {
-                const response = await fetch(`${API_BASE}/api/phone/location`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        lat: lat,
-                        lon: lon,
-                        accuracy: accuracy,
-                        timestamp: new Date().toISOString(),
-                        device: 'iphone_safari'
-                    })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.ok) {
-                        updateCount++;
-                        updateCountEl.textContent = updateCount;
-                        lastUpdateEl.textContent = new Date().toLocaleTimeString();
-                        hideError();
-                    }
-                } else {
-                    console.error('Server error:', response.status);
-                }
-            } catch (err) {
-                console.error('Network error:', err);
-                // Don't show error for network issues during active tracking
-                // The connection will retry automatically
-            }
-        }
-        
-        function showError(message) {
-            errorMsg.textContent = message;
-            errorMsg.classList.remove('hidden');
-        }
-        
-        function hideError() {
-            errorMsg.classList.add('hidden');
-        }
+        });
     </script>
 </body>
 </html>

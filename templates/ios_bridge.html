@@ -417,24 +417,52 @@
             toggleBtn.disabled = true;
             
             // Safari-optimized geolocation options
-            const options = {
+            const geoOptions = {
                 enableHighAccuracy: true,
                 timeout: 15000,        // 15 second timeout
                 maximumAge: 0          // Always get fresh location
             };
             
-            // Use watchPosition for continuous updates
-            watchId = navigator.geolocation.watchPosition(
-                onLocationSuccess,
-                onLocationError,
-                options
-            );
+            // CRITICAL: Safari requires geolocation permission request to happen
+            // SYNCHRONOUSLY inside the direct click handler. Any async wrapper
+            // (Promises, setTimeout, fetch callbacks) will cause Safari to block
+            // the permission popup silently.
             
-            isTracking = true;
-            toggleBtn.disabled = false;
-            toggleBtn.textContent = '⏹️ Stop Sharing';
-            toggleBtn.classList.add('stop');
-            toggleBtn.classList.remove('active');
+            if (!navigator.geolocation) {
+                showError('Geolocation is not supported by your browser');
+                toggleBtn.disabled = false;
+                return;
+            }
+            
+            // Request permission IMMEDIATELY (synchronous call in click handler)
+            navigator.geolocation.getCurrentPosition(
+                function onPermissionGranted(position) {
+                    // Permission was granted - process first location
+                    console.log("✅ Location permission granted", position.coords);
+                    onLocationSuccess(position);
+                    
+                    // NOW we can safely start watchPosition for continuous updates
+                    watchId = navigator.geolocation.watchPosition(
+                        onLocationSuccess,
+                        onLocationError,
+                        geoOptions
+                    );
+                    
+                    isTracking = true;
+                    toggleBtn.disabled = false;
+                    toggleBtn.textContent = '⏹️ Stop Sharing';
+                    toggleBtn.classList.add('stop');
+                    toggleBtn.classList.remove('active');
+                },
+                function onPermissionDenied(error) {
+                    // Permission denied or error occurred
+                    console.error("❌ Location permission error", error);
+                    onLocationError(error);
+                    toggleBtn.disabled = false;
+                    statusDot.classList.remove('warning');
+                },
+                geoOptions  // Same options for the initial permission request
+            );
         }
         
         function stopTracking() {

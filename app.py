@@ -15,6 +15,25 @@ import socket
 import json
 
 # =============================================================================
+# Force IPv4 for Safari/iPhone GPS Bridge Compatibility
+# =============================================================================
+# Safari on iOS has issues with geolocation API over IPv6
+# Force all socket operations to use IPv4
+
+# Set environment variable to prefer IPv4
+os.environ["GEVENT_RESOLVER"] = "ares"
+
+# Monkey-patch socket to prefer IPv4
+_original_getaddrinfo = socket.getaddrinfo
+def _ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    """Force IPv4 (AF_INET) for all address lookups"""
+    return _original_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+
+# Only apply on Linux (Raspberry Pi) - macOS handles this fine
+if platform.system().lower() == 'linux':
+    socket.getaddrinfo = _ipv4_getaddrinfo
+
+# =============================================================================
 # Runtime IP Detection (for LAN access from iPhone/etc)
 # =============================================================================
 
@@ -134,6 +153,21 @@ app.config['SECRET_KEY'] = 'car-stereo-secret-key-2025'
 # Enable CORS for iPhone Safari GPS bridge
 if CORS_AVAILABLE:
     CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# Additional CORS headers for Safari GPS compatibility (works even without flask-cors)
+@app.after_request
+def add_safari_cors_headers(response):
+    """
+    Add comprehensive CORS headers for iPhone Safari GPS bridge.
+    Safari requires these headers to allow geolocation API calls from the page.
+    """
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, Authorization"
+    response.headers["Access-Control-Max-Age"] = "3600"
+    # Allow credentials for potential future auth
+    response.headers["Access-Control-Allow-Credentials"] = "false"
+    return response
 
 # Initialize managers
 sense_hat = SenseHATManager()

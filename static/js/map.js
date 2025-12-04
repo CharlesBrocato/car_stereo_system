@@ -1,9 +1,10 @@
 // Map navigation JavaScript
-// Supports coordinates, street addresses, and POI navigation
+// Supports coordinates, street addresses, POI navigation, and turn-by-turn directions
 // Location sources: Phone (Bluetooth) -> Pi (GPS/IP) -> Browser -> Default
 
 let map;
 let routeLayer;
+let currentRouteLayer = null;
 let markers = [];
 let poiMarkers = [];
 let selectedPlace = null;
@@ -260,6 +261,240 @@ function clearPoiMarkers() {
 }
 
 // =============================================================================
+// Route Drawing
+// =============================================================================
+
+function drawRouteOnMap(route) {
+    // Clear previous route
+    if (currentRouteLayer) {
+        map.removeLayer(currentRouteLayer);
+        currentRouteLayer = null;
+    }
+    
+    clearMarkers();
+    clearPoiMarkers();
+    
+    // Get polyline coordinates
+    const polyline = route.polyline || route.waypoints || [];
+    
+    if (polyline.length < 2) {
+        console.error('Invalid polyline data');
+        showError('Could not display route');
+        return;
+    }
+    
+    // Draw the route polyline
+    currentRouteLayer = L.polyline(polyline, {
+        color: '#1a73e8',
+        weight: 6,
+        opacity: 0.9,
+        lineJoin: 'round'
+    }).addTo(map);
+    
+    // Add start marker
+    const startIcon = L.divIcon({
+        className: 'route-marker',
+        html: `<div style="
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(17, 153, 142, 0.4);
+        ">📍 Start</div>`,
+        iconSize: null
+    });
+    
+    L.marker(polyline[0], {icon: startIcon}).addTo(map).bindPopup('Starting point');
+    
+    // Add end marker
+    const destName = route.destination_name || 'Destination';
+    const truncatedName = destName.length > 18 ? destName.substring(0, 18) + '...' : destName;
+    
+    const endIcon = L.divIcon({
+        className: 'route-marker',
+        html: `<div style="
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-weight: bold;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(235, 51, 73, 0.4);
+        ">🎯 ${truncatedName}</div>`,
+        iconSize: null
+    });
+    
+    L.marker(polyline[polyline.length - 1], {icon: endIcon}).addTo(map).bindPopup(destName);
+    
+    // Fit map to show entire route
+    map.fitBounds(currentRouteLayer.getBounds(), { padding: [50, 50] });
+    
+    // Show turn-by-turn directions
+    showTurnByTurn(route);
+}
+
+// =============================================================================
+// Turn-by-Turn Directions
+// =============================================================================
+
+function showTurnByTurn(route) {
+    const panel = document.getElementById('directions-panel');
+    const summary = document.getElementById('directions-summary');
+    const stepsDiv = document.getElementById('directions-steps');
+    const banner = document.getElementById('next-turn-banner');
+    const turnText = document.getElementById('next-turn-text');
+    const turnIcon = document.getElementById('turn-icon');
+    const turnDistance = document.getElementById('next-turn-distance');
+    
+    // Show the panel
+    panel.classList.remove('hidden');
+    
+    // Calculate display values
+    const distanceM = route.distance_m || 0;
+    const durationS = route.duration_s || 0;
+    const distanceMiles = (distanceM / 1609.34).toFixed(1);
+    const durationMins = Math.round(durationS / 60);
+    const destName = route.destination_name || route.destination_input || 'Destination';
+    
+    // Build summary
+    summary.innerHTML = `
+        <div class="summary-row">
+            <span class="summary-label">Distance</span>
+            <span class="summary-value">${route.distance || distanceMiles + ' mi'}</span>
+        </div>
+        <div class="summary-row">
+            <span class="summary-label">Est. Time</span>
+            <span class="summary-value">${route.duration || durationMins + ' min'}</span>
+        </div>
+        <div class="destination-name">
+            🎯 ${destName}
+        </div>
+    `;
+    
+    // Build steps
+    const steps = route.steps || [];
+    
+    if (steps.length === 0) {
+        stepsDiv.innerHTML = `
+            <div class="step-item">
+                <div class="step-instruction">Head toward your destination</div>
+                <div class="step-distance">${route.distance || 'Unknown distance'}</div>
+            </div>
+        `;
+    } else {
+        stepsDiv.innerHTML = steps.map((step, index) => {
+            const icon = getManeuverIcon(step.type, step.modifier);
+            const distanceText = formatStepDistance(step.distance_m);
+            
+            return `
+                <div class="step-item ${index === 0 ? 'active' : ''}" 
+                     onclick="focusStep(${step.lat}, ${step.lon})">
+                    <div class="step-number">
+                        <span class="step-icon">${icon}</span>
+                        Step ${index + 1}
+                    </div>
+                    <div class="step-instruction">${step.instruction}</div>
+                    <div class="step-distance">${distanceText}</div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    // Show next turn banner
+    if (steps.length > 0) {
+        banner.classList.remove('hidden');
+        const firstStep = steps[0];
+        const icon = getManeuverIcon(firstStep.type, firstStep.modifier);
+        turnIcon.textContent = icon;
+        turnText.textContent = firstStep.instruction;
+        turnDistance.textContent = formatStepDistance(firstStep.distance_m);
+    } else {
+        banner.classList.add('hidden');
+    }
+}
+
+function getManeuverIcon(type, modifier) {
+    // Map maneuver types to icons
+    const icons = {
+        'depart': '🚗',
+        'arrive': '🏁',
+        'turn': modifier === 'left' ? '↰' : modifier === 'right' ? '↱' : '↑',
+        'new name': '↑',
+        'merge': '⤵',
+        'on ramp': '↗',
+        'off ramp': '↘',
+        'fork': modifier === 'left' ? '↖' : '↗',
+        'end of road': modifier === 'left' ? '↰' : '↱',
+        'continue': '↑',
+        'roundabout': '🔄',
+        'rotary': '🔄',
+        'roundabout turn': '🔄',
+        'exit roundabout': '↱',
+        'exit rotary': '↱'
+    };
+    
+    // Check modifier for turn direction
+    if (type === 'turn' || type === 'end of road' || type === 'fork') {
+        if (modifier === 'left' || modifier === 'sharp left' || modifier === 'slight left') {
+            return '↰';
+        } else if (modifier === 'right' || modifier === 'sharp right' || modifier === 'slight right') {
+            return '↱';
+        } else if (modifier === 'uturn') {
+            return '↩';
+        }
+    }
+    
+    return icons[type] || '↑';
+}
+
+function formatStepDistance(meters) {
+    if (!meters || meters < 0) return '';
+    
+    if (meters < 100) {
+        return `${Math.round(meters)} m`;
+    } else if (meters < 1000) {
+        return `${Math.round(meters / 10) * 10} m`;
+    } else {
+        const miles = meters / 1609.34;
+        return `${miles.toFixed(1)} mi`;
+    }
+}
+
+function focusStep(lat, lon) {
+    if (lat && lon) {
+        map.setView([lat, lon], 17);
+    }
+}
+
+function closeDirectionsPanel() {
+    const panel = document.getElementById('directions-panel');
+    const banner = document.getElementById('next-turn-banner');
+    
+    panel.classList.add('hidden');
+    banner.classList.add('hidden');
+    
+    // Clear route
+    if (currentRouteLayer) {
+        map.removeLayer(currentRouteLayer);
+        currentRouteLayer = null;
+    }
+    
+    clearMarkers();
+    
+    // Recenter on user location
+    if (window.currentLocation) {
+        map.setView([window.currentLocation.lat, window.currentLocation.lon], 14);
+        addMarker([window.currentLocation.lat, window.currentLocation.lon], 'Your Location', 'blue');
+    }
+}
+
+// Make closeDirectionsPanel globally available
+window.closeDirectionsPanel = closeDirectionsPanel;
+window.focusStep = focusStep;
+
+// =============================================================================
 // Places Search with Panel
 // =============================================================================
 
@@ -272,6 +507,9 @@ async function searchNearbyPlaces(placeType) {
             return;
         }
     }
+    
+    // Close directions panel if open
+    closeDirectionsPanel();
     
     // Update button state
     const btn = document.getElementById(`btn-${placeType}`);
@@ -423,26 +661,23 @@ async function navigateToPlace(lat, lon, name) {
     
     showSuccess(`Getting route to ${name}...`);
     
+    // Close places panel
+    closePlacesPanel();
+    
     try {
         const url = `/api/route/to_place?start_lat=${window.currentLocation.lat}&start_lon=${window.currentLocation.lon}&lat=${lat}&lon=${lon}&name=${encodeURIComponent(name)}`;
         const response = await fetch(url);
         const data = await response.json();
         
         if (data.ok || data.success) {
-            // Close places panel
-            closePlacesPanel();
-            
-            // Display route
-            displayRoute(data);
+            // Draw route and show directions
+            drawRouteOnMap(data);
             
             // Update destination input
             const destInput = document.getElementById('dest-input');
             if (destInput) {
                 destInput.value = name;
             }
-            
-            // Show route info
-            showRouteInfo(data);
             
         } else {
             showError(data.error || data.message || 'Could not calculate route');
@@ -500,47 +735,6 @@ function showSuccess(message) {
     setTimeout(() => { panel.style.display = 'none'; }, 3000);
 }
 
-function showRouteInfo(data) {
-    let infoPanel = document.getElementById('route-info-panel');
-    if (!infoPanel) {
-        infoPanel = document.createElement('div');
-        infoPanel.id = 'route-info-panel';
-        infoPanel.style.cssText = `
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-top: 15px;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-        `;
-        document.querySelector('.map-controls').appendChild(infoPanel);
-    }
-    
-    const destName = data.destination_name || 'Destination';
-    
-    infoPanel.innerHTML = `
-        <h4 style="margin: 0 0 10px 0; font-size: 1.1em;">🧭 Route to ${destName}</h4>
-        <div style="display: flex; justify-content: space-between; gap: 20px;">
-            <div>
-                <div style="opacity: 0.8; font-size: 0.85em;">Distance</div>
-                <div style="font-size: 1.2em; font-weight: 600;">${data.distance}</div>
-            </div>
-            <div>
-                <div style="opacity: 0.8; font-size: 0.85em;">Est. Time</div>
-                <div style="font-size: 1.2em; font-weight: 600;">${data.duration}</div>
-            </div>
-        </div>
-    `;
-    infoPanel.style.display = 'block';
-}
-
-function hideRouteInfo() {
-    const infoPanel = document.getElementById('route-info-panel');
-    if (infoPanel) {
-        infoPanel.style.display = 'none';
-    }
-}
-
 function showError(message) {
     let errorPanel = document.getElementById('error-panel');
     if (!errorPanel) {
@@ -569,12 +763,12 @@ function showError(message) {
 }
 
 // =============================================================================
-// Routing
+// Routing (Manual entry)
 // =============================================================================
 
 async function calculateRoute(origin, destination) {
     setLoading(true);
-    hideRouteInfo();
+    closeDirectionsPanel();
     
     try {
         const response = await fetch('/api/map/route', {
@@ -585,8 +779,7 @@ async function calculateRoute(origin, destination) {
         const data = await response.json();
         
         if (data.success) {
-            displayRoute(data);
-            showRouteInfo(data);
+            drawRouteOnMap(data);
         } else {
             showError(data.message || 'Route calculation failed');
         }
@@ -595,47 +788,6 @@ async function calculateRoute(origin, destination) {
         showError('Network error - please try again');
     } finally {
         setLoading(false);
-    }
-}
-
-function displayRoute(data) {
-    clearMarkers();
-    clearPoiMarkers();
-    if (routeLayer) {
-        map.removeLayer(routeLayer);
-    }
-    
-    const waypoints = data.waypoints;
-    
-    if (waypoints && waypoints.length >= 2) {
-        const origin = waypoints[0];
-        const destination = waypoints[waypoints.length - 1];
-        
-        const originLabel = data.origin_input || `${origin[0].toFixed(4)}, ${origin[1].toFixed(4)}`;
-        const destLabel = data.destination_name || data.destination_input || `${destination[0].toFixed(4)}, ${destination[1].toFixed(4)}`;
-        
-        const originIcon = L.divIcon({
-            className: 'custom-marker',
-            html: '<div style="background: #11998e; color: white; padding: 8px 14px; border-radius: 20px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">📍 Start</div>',
-            iconSize: null
-        });
-        
-        const destIcon = L.divIcon({
-            className: 'custom-marker', 
-            html: '<div style="background: #eb3349; color: white; padding: 8px 14px; border-radius: 20px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">🎯 ' + (destLabel.length > 20 ? destLabel.substring(0, 20) + '...' : destLabel) + '</div>',
-            iconSize: null
-        });
-        
-        L.marker(origin, {icon: originIcon}).addTo(map).bindPopup(`<b>Start:</b><br>${originLabel}`);
-        L.marker(destination, {icon: destIcon}).addTo(map).bindPopup(`<b>Destination:</b><br>${destLabel}`);
-        
-        routeLayer = L.polyline(waypoints, {
-            color: '#667eea',
-            weight: 6,
-            opacity: 0.9
-        }).addTo(map);
-        
-        map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
     }
 }
 

@@ -23,6 +23,173 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         
+        /* Hidden class */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Next Turn Banner - Top center overlay */
+        #next-turn-banner {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 1em;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(26, 115, 232, 0.4);
+            z-index: 1001;
+            max-width: 80%;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #next-turn-banner .turn-icon {
+            font-size: 1.3em;
+        }
+        
+        #next-turn-banner .turn-distance {
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-left: 8px;
+        }
+        
+        /* Directions Panel - Left side */
+        #directions-panel {
+            position: absolute;
+            left: 10px;
+            top: 10px;
+            bottom: 10px;
+            width: 280px;
+            background: rgba(30, 30, 35, 0.95);
+            border-radius: 16px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            overflow-y: auto;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        
+        #directions-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        #directions-panel-header h3 {
+            color: white;
+            font-size: 1.1em;
+            margin: 0;
+        }
+        
+        #directions-panel-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #directions-panel-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        #directions-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            color: white;
+        }
+        
+        #directions-summary .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        #directions-summary .summary-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        #directions-summary .summary-label {
+            opacity: 0.8;
+            font-size: 0.85em;
+        }
+        
+        #directions-summary .summary-value {
+            font-weight: 700;
+            font-size: 1.1em;
+        }
+        
+        #directions-summary .destination-name {
+            font-size: 0.95em;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        #directions-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .step-item {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 12px;
+            border-left: 4px solid #1a73e8;
+            transition: all 0.2s;
+        }
+        
+        .step-item:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        
+        .step-item.active {
+            border-left-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.15);
+        }
+        
+        .step-number {
+            color: #1a73e8;
+            font-weight: 700;
+            font-size: 0.9em;
+            margin-bottom: 4px;
+        }
+        
+        .step-instruction {
+            color: white;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        
+        .step-distance {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+        
+        .step-icon {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+        
         /* Places Panel - CarPlay Style */
         #places-panel {
             position: absolute;
@@ -273,11 +440,28 @@
         </header>
         
         <main class="map-container">
-            <!-- Map Display with Places Panel -->
+            <!-- Map Display with Panels -->
             <div class="map-wrapper">
                 <div id="map"></div>
                 
-                <!-- Places Results Panel -->
+                <!-- Next Turn Banner (top center) -->
+                <div id="next-turn-banner" class="hidden">
+                    <span class="turn-icon" id="turn-icon">↑</span>
+                    <span id="next-turn-text">Getting directions...</span>
+                    <span class="turn-distance" id="next-turn-distance"></span>
+                </div>
+                
+                <!-- Directions Panel (left side) -->
+                <div id="directions-panel" class="hidden">
+                    <div id="directions-panel-header">
+                        <h3>🧭 Directions</h3>
+                        <button id="directions-panel-close" onclick="closeDirectionsPanel()">×</button>
+                    </div>
+                    <div id="directions-summary"></div>
+                    <div id="directions-steps"></div>
+                </div>
+                
+                <!-- Places Results Panel (right side) -->
                 <div id="places-panel">
                     <div id="places-panel-header">
                         <h3 id="places-panel-title">Nearby Places</h3>

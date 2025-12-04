@@ -128,7 +128,7 @@ class MapManager:
     
     def get_route(self, origin, destination):
         """
-        Get route between two points.
+        Get route between two points using OSRM (Open Source Routing Machine).
         Accepts either coordinates or street addresses for both origin and destination.
         
         Args:
@@ -136,7 +136,7 @@ class MapManager:
             destination: End point (coordinates string or street address)
             
         Returns:
-            Dictionary with route information or error message
+            Dictionary with route information including polyline and turn-by-turn steps
         """
         try:
             # Parse origin (could be coords or address)
@@ -149,12 +149,31 @@ class MapManager:
             origin_list = list(origin_coords)
             dest_list = list(dest_coords)
             
-            # Calculate approximate distance (haversine formula)
-            distance = self._calculate_distance(origin_coords, dest_coords)
+            # Try to get actual route from OSRM
+            route_data = self._get_osrm_route(origin_coords, dest_coords)
             
-            # Estimate duration (rough estimate: 30 mph average)
-            duration_hours = distance / 30  # assuming 30 mph average
+            if route_data:
+                return {
+                    'success': True,
+                    'origin': origin_list,
+                    'origin_input': origin,
+                    'destination': dest_list,
+                    'destination_input': destination,
+                    'distance': route_data['distance_text'],
+                    'duration': route_data['duration_text'],
+                    'distance_m': route_data['distance_m'],
+                    'duration_s': route_data['duration_s'],
+                    'polyline': route_data['polyline'],
+                    'steps': route_data['steps'],
+                    'waypoints': route_data['polyline']  # Full route path
+                }
+            
+            # Fallback to simple straight-line calculation
+            distance = self._calculate_distance(origin_coords, dest_coords)
+            duration_hours = distance / 30
             duration_mins = int(duration_hours * 60)
+            distance_m = distance * 1609.34
+            duration_s = duration_mins * 60
             
             return {
                 'success': True,
@@ -164,7 +183,16 @@ class MapManager:
                 'destination_input': destination,
                 'distance': f"{distance:.1f} miles",
                 'duration': f"{duration_mins} mins" if duration_mins < 60 else f"{duration_hours:.1f} hours",
-                'waypoints': [origin_list, dest_list]  # Simplified route
+                'distance_m': distance_m,
+                'duration_s': duration_s,
+                'polyline': [origin_list, dest_list],
+                'steps': [{
+                    'instruction': f'Head toward destination ({distance:.1f} miles)',
+                    'distance_m': distance_m,
+                    'lat': dest_list[0],
+                    'lon': dest_list[1]
+                }],
+                'waypoints': [origin_list, dest_list]
             }
         except ValueError as e:
             print(f"Route calculation error: {e}")
@@ -178,6 +206,151 @@ class MapManager:
                 'success': False,
                 'message': f"Error calculating route: {str(e)}"
             }
+    
+    def _get_osrm_route(self, origin_coords, dest_coords):
+        """
+        Get route from OSRM (Open Source Routing Machine) API.
+        Returns polyline coordinates and turn-by-turn directions.
+        
+        Args:
+            origin_coords: Tuple of (lat, lon)
+            dest_coords: Tuple of (lat, lon)
+            
+        Returns:
+            Dictionary with route data or None if failed
+        """
+        try:
+            # OSRM uses lon,lat format (opposite of typical lat,lon)
+            origin_str = f"{origin_coords[1]},{origin_coords[0]}"
+            dest_str = f"{dest_coords[1]},{dest_coords[0]}"
+            
+            # Use public OSRM demo server (for production, use self-hosted)
+            url = f"https://router.project-osrm.org/route/v1/driving/{origin_str};{dest_str}"
+            params = {
+                'overview': 'full',
+                'geometries': 'geojson',
+                'steps': 'true',
+                'annotations': 'true'
+            }
+            
+            response = requests.get(url, params=params, timeout=15, headers={
+                'User-Agent': 'car_stereo_system_v1'
+            })
+            data = response.json()
+            
+            if data.get('code') != 'Ok' or not data.get('routes'):
+                print(f"OSRM error: {data.get('code', 'Unknown')}")
+                return None
+            
+            route = data['routes'][0]
+            
+            # Extract distance and duration
+            distance_m = route.get('distance', 0)  # meters
+            duration_s = route.get('duration', 0)  # seconds
+            
+            # Format for display
+            distance_mi = distance_m / 1609.34
+            duration_min = duration_s / 60
+            
+            if distance_mi < 0.1:
+                distance_text = f"{int(distance_m)} m"
+            else:
+                distance_text = f"{distance_mi:.1f} miles"
+            
+            if duration_min < 1:
+                duration_text = "< 1 min"
+            elif duration_min < 60:
+                duration_text = f"{int(duration_min)} mins"
+            else:
+                hours = int(duration_min // 60)
+                mins = int(duration_min % 60)
+                duration_text = f"{hours}h {mins}m"
+            
+            # Extract polyline coordinates (GeoJSON format: [lon, lat] -> [lat, lon])
+            geometry = route.get('geometry', {})
+            coords = geometry.get('coordinates', [])
+            polyline = [[coord[1], coord[0]] for coord in coords]  # Convert to [lat, lon]
+            
+            # Extract turn-by-turn steps
+            steps = []
+            legs = route.get('legs', [])
+            for leg in legs:
+                for step in leg.get('steps', []):
+                    maneuver = step.get('maneuver', {})
+                    
+                    # Build instruction text
+                    instruction = self._build_instruction(step, maneuver)
+                    
+                    steps.append({
+                        'instruction': instruction,
+                        'distance_m': step.get('distance', 0),
+                        'duration_s': step.get('duration', 0),
+                        'lat': maneuver.get('location', [0, 0])[1],  # lon,lat -> lat
+                        'lon': maneuver.get('location', [0, 0])[0],  # lon,lat -> lon
+                        'type': maneuver.get('type', ''),
+                        'modifier': maneuver.get('modifier', '')
+                    })
+            
+            return {
+                'distance_m': distance_m,
+                'duration_s': duration_s,
+                'distance_text': distance_text,
+                'duration_text': duration_text,
+                'polyline': polyline,
+                'steps': steps
+            }
+            
+        except Exception as e:
+            print(f"OSRM route error: {e}")
+            return None
+    
+    def _build_instruction(self, step, maneuver):
+        """
+        Build human-readable instruction from OSRM step data.
+        
+        Args:
+            step: OSRM step object
+            maneuver: OSRM maneuver object
+            
+        Returns:
+            String instruction
+        """
+        maneuver_type = maneuver.get('type', '')
+        modifier = maneuver.get('modifier', '')
+        name = step.get('name', '')
+        ref = step.get('ref', '')
+        
+        # Use road reference if name is empty
+        road_name = name or ref or 'the road'
+        
+        # Build instruction based on maneuver type
+        instructions = {
+            'depart': f"Start on {road_name}",
+            'arrive': f"Arrive at your destination",
+            'turn': f"Turn {modifier} onto {road_name}",
+            'new name': f"Continue onto {road_name}",
+            'merge': f"Merge onto {road_name}",
+            'on ramp': f"Take the ramp onto {road_name}",
+            'off ramp': f"Take the exit onto {road_name}",
+            'fork': f"Keep {modifier} onto {road_name}",
+            'end of road': f"At the end of the road, turn {modifier} onto {road_name}",
+            'continue': f"Continue on {road_name}",
+            'roundabout': f"Enter the roundabout and take the exit onto {road_name}",
+            'rotary': f"Enter the rotary and take the exit onto {road_name}",
+            'roundabout turn': f"At the roundabout, turn {modifier}",
+            'notification': f"Continue on {road_name}",
+            'exit roundabout': f"Exit the roundabout onto {road_name}",
+            'exit rotary': f"Exit the rotary onto {road_name}"
+        }
+        
+        instruction = instructions.get(maneuver_type, f"Continue on {road_name}")
+        
+        # Clean up instruction
+        instruction = instruction.replace('  ', ' ').strip()
+        if instruction.endswith(' onto '):
+            instruction = instruction[:-6]
+        
+        return instruction
     
     def _calculate_distance(self, coord1, coord2):
         """

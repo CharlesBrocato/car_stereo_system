@@ -12,6 +12,107 @@ let selectedPlace = null;
 // Store current location globally for navigation
 window.currentLocation = null;
 
+// Touch zoom tracking for Raspberry Pi fix
+let lastPinchDistance = null;
+
+// =============================================================================
+// Touch Zoom Fix for Raspberry Pi
+// =============================================================================
+
+function setupTouchZoomFix() {
+    /**
+     * Fix for Raspberry Pi touchscreen where pinch-to-zoom only works in one direction.
+     * This is a known Chromium + RPi touchscreen issue with multi-touch events.
+     */
+    
+    const mapElement = document.getElementById('map');
+    if (!mapElement) return;
+    
+    // Ensure touch zoom is enabled
+    if (map.touchZoom) {
+        map.touchZoom.enable();
+    }
+    
+    // Manual pinch-zoom fallback that handles both zoom in AND zoom out
+    let initialDistance = null;
+    let initialZoom = null;
+    let isZooming = false;
+    
+    mapElement.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+            // Two fingers down - start zoom gesture
+            const p1 = e.touches[0];
+            const p2 = e.touches[1];
+            
+            const dx = p1.pageX - p2.pageX;
+            const dy = p1.pageY - p2.pageY;
+            
+            initialDistance = Math.sqrt(dx * dx + dy * dy);
+            initialZoom = map.getZoom();
+            isZooming = true;
+            lastPinchDistance = initialDistance;
+            
+            // Prevent default to avoid conflicts
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    mapElement.addEventListener('touchmove', function(e) {
+        if (e.touches.length === 2 && isZooming && initialDistance !== null) {
+            const p1 = e.touches[0];
+            const p2 = e.touches[1];
+            
+            const dx = p1.pageX - p2.pageX;
+            const dy = p1.pageY - p2.pageY;
+            
+            const currentDistance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Calculate zoom delta based on pinch scale
+            const scale = currentDistance / initialDistance;
+            const zoomDelta = Math.log2(scale);
+            
+            // Apply zoom with bounds checking
+            const newZoom = initialZoom + zoomDelta;
+            const clampedZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), newZoom));
+            
+            // Calculate center point between fingers
+            const centerX = (p1.pageX + p2.pageX) / 2;
+            const centerY = (p1.pageY + p2.pageY) / 2;
+            
+            // Get the map container's position
+            const rect = mapElement.getBoundingClientRect();
+            const containerPoint = L.point(centerX - rect.left, centerY - rect.top);
+            const latlng = map.containerPointToLatLng(containerPoint);
+            
+            // Set zoom around the pinch center
+            map.setZoomAround(latlng, clampedZoom, { animate: false });
+            
+            // Prevent default to avoid conflicts
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    mapElement.addEventListener('touchend', function(e) {
+        if (e.touches.length < 2) {
+            // Reset when fingers are lifted
+            initialDistance = null;
+            initialZoom = null;
+            isZooming = false;
+            lastPinchDistance = null;
+        }
+    });
+    
+    mapElement.addEventListener('touchcancel', function(e) {
+        // Reset on touch cancel
+        initialDistance = null;
+        initialZoom = null;
+        isZooming = false;
+        lastPinchDistance = null;
+    });
+    
+    console.log('Touch zoom fix initialized for Raspberry Pi');
+}
+
 // =============================================================================
 // Location Services
 // =============================================================================
@@ -78,12 +179,29 @@ async function getBestLocation() {
 async function initMap() {
     const defaultLocation = [43.6532, -79.3832];
     
-    map = L.map('map').setView(defaultLocation, 13);
+    // Initialize map with touch-friendly options for Raspberry Pi
+    map = L.map('map', {
+        center: defaultLocation,
+        zoom: 13,
+        zoomControl: true,
+        scrollWheelZoom: true,
+        touchZoom: true,
+        tap: true,
+        dragging: true,
+        bounceAtZoomLimits: false,
+        wheelDebounceTime: 0,
+        wheelPxPerZoomLevel: 100,
+        // Enable gesture handling if plugin is loaded
+        gestureHandling: typeof L.GestureHandling !== 'undefined'
+    });
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
     }).addTo(map);
+    
+    // Setup touch zoom fix for Raspberry Pi
+    setupTouchZoomFix();
     
     // Get best available location
     const location = await getBestLocation();

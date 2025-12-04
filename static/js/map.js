@@ -12,6 +12,11 @@ let selectedPlace = null;
 // Store current location globally for navigation
 window.currentLocation = null;
 
+// Current location marker (for real-time updates)
+let currentLocationMarker = null;
+let locationPollingInterval = null;
+let isNavigating = false;  // Track if actively navigating
+
 // Touch zoom tracking for Raspberry Pi fix
 let lastPinchDistance = null;
 
@@ -173,6 +178,121 @@ async function getBestLocation() {
 }
 
 // =============================================================================
+// Real-Time Location Updates (iPhone GPS Bridge)
+// =============================================================================
+
+function setCurrentLocation(lat, lon, source = 'phone') {
+    /**
+     * Update the current location and optionally move the marker.
+     * Called by real-time polling from iPhone GPS bridge.
+     */
+    window.currentLocation = { lat, lon, source };
+    
+    // Update the location marker on the map
+    if (map) {
+        const location = [lat, lon];
+        
+        // Create or update the current location marker
+        if (currentLocationMarker) {
+            currentLocationMarker.setLatLng(location);
+        } else {
+            // Create a distinctive "current location" marker
+            const icon = L.divIcon({
+                className: 'current-location-marker',
+                html: `<div style="
+                    width: 18px;
+                    height: 18px;
+                    background: #4285F4;
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 0 10px rgba(66, 133, 244, 0.5), 0 2px 5px rgba(0,0,0,0.3);
+                "></div>`,
+                iconSize: [18, 18],
+                iconAnchor: [9, 9]
+            });
+            
+            currentLocationMarker = L.marker(location, { icon, zIndexOffset: 1000 })
+                .addTo(map)
+                .bindPopup(`📍 Your Location (${source})`);
+        }
+        
+        // Only auto-center if not actively navigating and not in POI search
+        const placesPanel = document.getElementById('places-panel');
+        const directionsPanel = document.getElementById('directions-panel');
+        const shouldAutoCenter = !isNavigating && 
+            (!placesPanel || !placesPanel.classList.contains('visible')) &&
+            (!directionsPanel || directionsPanel.classList.contains('hidden'));
+        
+        if (shouldAutoCenter) {
+            // Smoothly pan to new location
+            map.panTo(location, { animate: true, duration: 0.5 });
+        }
+    }
+    
+    // Update the coordinates display if visible
+    const coordsDisplay = document.getElementById('current-coords');
+    if (coordsDisplay) {
+        coordsDisplay.textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+}
+
+function startLocationPolling(intervalMs = 2000) {
+    /**
+     * Start polling for phone location updates.
+     * This enables real-time GPS streaming from iPhone.
+     */
+    if (locationPollingInterval) {
+        clearInterval(locationPollingInterval);
+    }
+    
+    console.log(`Starting location polling every ${intervalMs}ms`);
+    
+    // Immediate first poll
+    pollPhoneLocation();
+    
+    // Set up interval
+    locationPollingInterval = setInterval(pollPhoneLocation, intervalMs);
+}
+
+function stopLocationPolling() {
+    if (locationPollingInterval) {
+        clearInterval(locationPollingInterval);
+        locationPollingInterval = null;
+        console.log('Location polling stopped');
+    }
+}
+
+async function pollPhoneLocation() {
+    /**
+     * Poll the backend for phone GPS location.
+     * Falls back to Pi location if phone GPS not available.
+     */
+    try {
+        // Try phone GPS first (iPhone bridge)
+        const phoneResponse = await fetch('/api/location/phone');
+        const phoneData = await phoneResponse.json();
+        
+        if (phoneData.ok && phoneData.lat && phoneData.lon) {
+            setCurrentLocation(phoneData.lat, phoneData.lon, phoneData.source || 'phone');
+            return;
+        }
+        
+        // Fall back to Pi location (less frequent updates are fine here)
+        // Only do this if we don't already have a location
+        if (!window.currentLocation || window.currentLocation.source === 'default') {
+            const piResponse = await fetch('/api/location/pi');
+            const piData = await piResponse.json();
+            
+            if (piData.ok && piData.lat && piData.lon) {
+                setCurrentLocation(piData.lat, piData.lon, piData.source || 'pi');
+            }
+        }
+    } catch (error) {
+        console.debug('Location poll error:', error);
+    }
+}
+
+// =============================================================================
 // Map Initialization
 // =============================================================================
 
@@ -210,24 +330,18 @@ async function initMap() {
     const userLocation = [location.lat, location.lon];
     map.setView(userLocation, 14);
     
-    const sourceText = location.source === 'default' ? 'Default Location' : 
-                       location.source === 'browser' ? 'Your Location' :
-                       location.source === 'phone' ? 'Your Location (Phone)' :
-                       location.source === 'gps' ? 'Your Location (GPS)' :
-                       location.source === 'ip' ? `Location (${location.city || 'IP'})` :
-                       'Your Location';
-    
-    addMarker(userLocation, sourceText, location.source === 'default' ? 'gray' : 'blue');
+    // Set up the current location marker
+    setCurrentLocation(location.lat, location.lon, location.source);
     
     // Update UI
-    const coordsDisplay = document.getElementById('current-coords');
     const locationInfo = document.getElementById('location-info');
-    if (coordsDisplay) {
-        coordsDisplay.textContent = `${location.lat.toFixed(6)}, ${location.lon.toFixed(6)}`;
-    }
     if (locationInfo && location.source !== 'default') {
         locationInfo.style.display = 'flex';
     }
+    
+    // Start polling for real-time location updates (iPhone GPS bridge)
+    // Poll every 2 seconds for live GPS from phone
+    startLocationPolling(2000);
 }
 
 // =============================================================================
@@ -383,6 +497,9 @@ function clearPoiMarkers() {
 // =============================================================================
 
 function drawRouteOnMap(route) {
+    // Mark as navigating (prevents auto-centering on location updates)
+    isNavigating = true;
+    
     // Clear previous route
     if (currentRouteLayer) {
         map.removeLayer(currentRouteLayer);
@@ -593,6 +710,9 @@ function closeDirectionsPanel() {
     panel.classList.add('hidden');
     banner.classList.add('hidden');
     
+    // No longer navigating
+    isNavigating = false;
+    
     // Clear route
     if (currentRouteLayer) {
         map.removeLayer(currentRouteLayer);
@@ -601,10 +721,14 @@ function closeDirectionsPanel() {
     
     clearMarkers();
     
+    // Reset the current location marker (will be recreated by next poll)
+    currentLocationMarker = null;
+    
     // Recenter on user location
     if (window.currentLocation) {
         map.setView([window.currentLocation.lat, window.currentLocation.lon], 14);
-        addMarker([window.currentLocation.lat, window.currentLocation.lon], 'Your Location', 'blue');
+        // Marker will be recreated by the next location poll
+        setCurrentLocation(window.currentLocation.lat, window.currentLocation.lon, window.currentLocation.source);
     }
 }
 

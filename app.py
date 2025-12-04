@@ -898,6 +898,15 @@ def phone_hangup():
     result = phone_manager.hangup_call()
     return jsonify(result)
 
+@app.route('/api/phone/reject', methods=['POST'])
+def phone_reject():
+    """Reject incoming call (alias for hangup)"""
+    if not PHONE_MANAGER_AVAILABLE or not phone_manager:
+        return jsonify({"success": False, "message": "Phone manager not available"})
+    
+    result = phone_manager.reject_call()
+    return jsonify(result)
+
 @app.route('/api/phone/dial', methods=['POST'])
 def phone_dial():
     """Dial a phone number"""

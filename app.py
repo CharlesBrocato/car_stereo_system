@@ -512,6 +512,31 @@ def current_location():
 # Places Search API (Overpass for POI)
 # =============================================================================
 
+def compute_distance_meters(lat1, lon1, lat2, lon2):
+    """
+    Calculate distance between two coordinates using Haversine formula.
+    Returns distance in meters.
+    """
+    import math
+    
+    lat1, lon1, lat2, lon2 = map(float, [lat1, lon1, lat2, lon2])
+    lat1_r, lon1_r, lat2_r, lon2_r = map(math.radians, [lat1, lon1, lat2, lon2])
+    
+    dlat = lat2_r - lat1_r
+    dlon = lon2_r - lon1_r
+    
+    a = math.sin(dlat/2)**2 + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    
+    # Earth's radius in meters
+    r = 6371000
+    
+    return c * r
+
+def meters_to_miles(meters):
+    """Convert meters to miles."""
+    return meters / 1609.344
+
 @app.route('/api/places/nearby')
 def places_nearby():
     """Search for places near a location using Overpass API"""
@@ -520,10 +545,13 @@ def places_nearby():
     lat = request.args.get('lat')
     lon = request.args.get('lon')
     place_type = request.args.get('type', 'fuel')  # fuel, restaurant, parking, hospital
-    radius = request.args.get('radius', '3000')  # meters
+    radius = request.args.get('radius', '5000')  # meters (default 5km)
     
     if not lat or not lon:
         return jsonify({"ok": False, "error": "Missing lat/lon parameters"})
+    
+    user_lat = float(lat)
+    user_lon = float(lon)
     
     # Map place types to Overpass tags
     type_mapping = {
@@ -535,13 +563,31 @@ def places_nearby():
         'hospital': '["amenity"="hospital"]',
         'pharmacy': '["amenity"="pharmacy"]',
         'atm': '["amenity"="atm"]',
-        'charging': '["amenity"="charging_station"]'
+        'charging': '["amenity"="charging_station"]',
+        'hotel': '["tourism"="hotel"]',
+        'supermarket': '["shop"="supermarket"]'
+    }
+    
+    # Human-readable type names
+    type_names = {
+        'fuel': 'Gas Stations',
+        'gas': 'Gas Stations',
+        'restaurant': 'Restaurants',
+        'food': 'Food & Dining',
+        'parking': 'Parking',
+        'hospital': 'Hospitals',
+        'pharmacy': 'Pharmacies',
+        'atm': 'ATMs',
+        'charging': 'EV Charging',
+        'hotel': 'Hotels',
+        'supermarket': 'Supermarkets'
     }
     
     tag = type_mapping.get(place_type, f'["amenity"="{place_type}"]')
+    type_name = type_names.get(place_type, place_type.title())
     
     query = f"""
-    [out:json][timeout:10];
+    [out:json][timeout:15];
     node
       {tag}
       (around:{radius},{lat},{lon});
@@ -553,31 +599,97 @@ def places_nearby():
             "https://overpass-api.de/api/interpreter",
             data={"data": query},
             headers={"User-Agent": "car_stereo_system"},
-            timeout=15
+            timeout=20
         )
         data = response.json()
         
-        # Format results
+        # Format results with distance calculation
         results = []
         for element in data.get("elements", []):
             tags = element.get("tags", {})
+            place_lat = element.get("lat")
+            place_lon = element.get("lon")
+            
+            if place_lat is None or place_lon is None:
+                continue
+            
+            # Calculate distance
+            distance_m = compute_distance_meters(user_lat, user_lon, place_lat, place_lon)
+            distance_mi = meters_to_miles(distance_m)
+            
+            # Get name (prefer brand + name combo for gas stations)
+            brand = tags.get("brand", "")
+            name = tags.get("name", "")
+            if brand and name and brand != name:
+                display_name = f"{brand} - {name}"
+            elif brand:
+                display_name = brand
+            elif name:
+                display_name = name
+            else:
+                display_name = f"Unnamed {type_name[:-1] if type_name.endswith('s') else type_name}"
+            
             results.append({
-                "lat": element.get("lat"),
-                "lon": element.get("lon"),
-                "name": tags.get("name", "Unknown"),
-                "brand": tags.get("brand", ""),
+                "lat": place_lat,
+                "lon": place_lon,
+                "name": display_name,
+                "brand": brand,
                 "address": tags.get("addr:street", ""),
-                "type": place_type
+                "city": tags.get("addr:city", ""),
+                "type": place_type,
+                "distance_m": round(distance_m, 1),
+                "distance_mi": round(distance_mi, 2),
+                "distance_text": f"{distance_mi:.1f} mi" if distance_mi >= 0.1 else f"{int(distance_m)} m"
             })
+        
+        # Sort by distance (closest first)
+        results.sort(key=lambda x: x["distance_m"])
         
         return jsonify({
             "ok": True,
+            "type": place_type,
+            "type_name": type_name,
             "count": len(results),
             "results": results
         })
         
     except Exception as e:
         logging.error(f"Overpass API error: {e}")
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route('/api/route/to_place')
+def route_to_place():
+    """Get route from current location to a specific place"""
+    start_lat = request.args.get('start_lat')
+    start_lon = request.args.get('start_lon')
+    dest_lat = request.args.get('lat')
+    dest_lon = request.args.get('lon')
+    dest_name = request.args.get('name', 'Destination')
+    
+    if not all([start_lat, start_lon, dest_lat, dest_lon]):
+        return jsonify({"ok": False, "error": "Missing coordinates"})
+    
+    try:
+        # Format as coordinate strings for map_manager
+        origin = f"{start_lat}, {start_lon}"
+        destination = f"{dest_lat}, {dest_lon}"
+        
+        # Get route from map manager
+        route = map_manager.get_route(origin, destination)
+        
+        if route.get('success'):
+            # Add destination name to response
+            route['destination_name'] = dest_name
+            route['ok'] = True
+            return jsonify(route)
+        else:
+            return jsonify({
+                "ok": False,
+                "error": route.get('message', 'Route calculation failed')
+            })
+            
+    except Exception as e:
+        logging.error(f"Route to place error: {e}")
         return jsonify({"ok": False, "error": str(e)})
 
 @app.route('/api/android_auto/start', methods=['POST'])

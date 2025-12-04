@@ -10,14 +10,160 @@
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
           crossorigin="">
     <style>
+        .map-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        
         #map {
-            height: 400px;
+            height: 450px;
             width: 100%;
             border-radius: 15px;
             margin-bottom: 20px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         
+        /* Places Panel - CarPlay Style */
+        #places-panel {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            bottom: 10px;
+            width: 280px;
+            background: rgba(30, 30, 35, 0.95);
+            border-radius: 16px;
+            padding: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        
+        #places-panel.visible {
+            display: block;
+        }
+        
+        #places-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        #places-panel-title {
+            color: white;
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        #places-panel-close {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #places-panel-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        #places-count {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.85em;
+            margin-bottom: 10px;
+        }
+        
+        #places-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .place-card {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+        
+        .place-card:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        
+        .place-card.closest {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.15);
+        }
+        
+        .place-card.selected {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.15);
+        }
+        
+        .place-card-name {
+            color: white;
+            font-weight: 600;
+            font-size: 0.95em;
+            margin-bottom: 4px;
+        }
+        
+        .place-card-distance {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+        
+        .place-card-address {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8em;
+            margin-bottom: 8px;
+        }
+        
+        .place-card-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+        
+        .place-card-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .place-card-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .closest-badge {
+            background: #4CAF50;
+            color: white;
+            font-size: 0.7em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+        
+        /* Map Controls */
         .map-controls {
             background: rgba(255, 255, 255, 0.95);
             padding: 20px;
@@ -80,10 +226,42 @@
             transition: all 0.3s;
         }
         
-        .quick-btn:active {
+        .quick-btn:active, .quick-btn.active {
             background: #667eea;
             color: white;
             transform: scale(0.95);
+        }
+        
+        .quick-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+        
+        /* Loading spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* No results message */
+        .no-results {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 30px 20px;
+        }
+        
+        .no-results-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -95,8 +273,20 @@
         </header>
         
         <main class="map-container">
-            <!-- Map Display -->
-            <div id="map"></div>
+            <!-- Map Display with Places Panel -->
+            <div class="map-wrapper">
+                <div id="map"></div>
+                
+                <!-- Places Results Panel -->
+                <div id="places-panel">
+                    <div id="places-panel-header">
+                        <h3 id="places-panel-title">Nearby Places</h3>
+                        <button id="places-panel-close" onclick="closePlacesPanel()">×</button>
+                    </div>
+                    <div id="places-count">Searching...</div>
+                    <div id="places-list"></div>
+                </div>
+            </div>
             
             <!-- Map Controls -->
             <div class="map-controls">
@@ -115,10 +305,10 @@
                 </div>
                 
                 <div class="quick-locations">
-                    <button class="quick-btn" onclick="searchNearbyPlaces('fuel')">⛽ Gas Stations</button>
-                    <button class="quick-btn" onclick="searchNearbyPlaces('restaurant')">🍽️ Restaurants</button>
-                    <button class="quick-btn" onclick="searchNearbyPlaces('parking')">🅿️ Parking</button>
-                    <button class="quick-btn" onclick="searchNearbyPlaces('hospital')">🏥 Hospitals</button>
+                    <button class="quick-btn" id="btn-fuel" onclick="searchNearbyPlaces('fuel')">⛽ Gas Stations</button>
+                    <button class="quick-btn" id="btn-restaurant" onclick="searchNearbyPlaces('restaurant')">🍽️ Restaurants</button>
+                    <button class="quick-btn" id="btn-parking" onclick="searchNearbyPlaces('parking')">🅿️ Parking</button>
+                    <button class="quick-btn" id="btn-hospital" onclick="searchNearbyPlaces('hospital')">🏥 Hospitals</button>
                 </div>
             </div>
         </main>
@@ -138,4 +328,3 @@
     <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 </body>
 </html>
-

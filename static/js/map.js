@@ -1,12 +1,15 @@
 // Map navigation JavaScript
-// Supports both coordinates and street address input
+// Supports coordinates, street addresses, and POI navigation
 // Location sources: Phone (Bluetooth) -> Pi (GPS/IP) -> Browser -> Default
 
 let map;
 let routeLayer;
 let markers = [];
-let currentLocation = null;
 let poiMarkers = [];
+let selectedPlace = null;
+
+// Store current location globally for navigation
+window.currentLocation = null;
 
 // =============================================================================
 // Location Services
@@ -72,12 +75,10 @@ async function getBestLocation() {
 // =============================================================================
 
 async function initMap() {
-    // Default location while we fetch actual location
     const defaultLocation = [43.6532, -79.3832];
     
     map = L.map('map').setView(defaultLocation, 13);
     
-    // Add OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
@@ -85,23 +86,21 @@ async function initMap() {
     
     // Get best available location
     const location = await getBestLocation();
-    currentLocation = location;
+    window.currentLocation = location;
     
-    // Update map with actual location
     const userLocation = [location.lat, location.lon];
     map.setView(userLocation, 14);
     
-    // Add marker for current location
     const sourceText = location.source === 'default' ? 'Default Location' : 
-                       location.source === 'browser' ? 'Your Location (Browser)' :
+                       location.source === 'browser' ? 'Your Location' :
                        location.source === 'phone' ? 'Your Location (Phone)' :
                        location.source === 'gps' ? 'Your Location (GPS)' :
-                       location.source === 'ip' ? `Approximate Location (${location.city || 'IP'})` :
+                       location.source === 'ip' ? `Location (${location.city || 'IP'})` :
                        'Your Location';
     
     addMarker(userLocation, sourceText, location.source === 'default' ? 'gray' : 'blue');
     
-    // Update the location info display if it exists
+    // Update UI
     const coordsDisplay = document.getElementById('current-coords');
     const locationInfo = document.getElementById('location-info');
     if (coordsDisplay) {
@@ -113,7 +112,7 @@ async function initMap() {
 }
 
 // =============================================================================
-// Use My Location Button Handler
+// Use My Location
 // =============================================================================
 
 async function useMyLocation() {
@@ -129,14 +128,12 @@ async function useMyLocation() {
     
     try {
         const location = await getBestLocation();
-        currentLocation = location;
+        window.currentLocation = location;
         
-        // Update input field
         if (originInput) {
             originInput.value = `${location.lat.toFixed(6)}, ${location.lon.toFixed(6)}`;
         }
         
-        // Update coords display
         if (coordsDisplay) {
             coordsDisplay.textContent = `${location.lat.toFixed(6)}, ${location.lon.toFixed(6)}`;
         }
@@ -144,7 +141,6 @@ async function useMyLocation() {
             locationInfo.style.display = 'flex';
         }
         
-        // Center map and add marker
         const userLocation = [location.lat, location.lon];
         map.setView(userLocation, 15);
         clearMarkers();
@@ -198,7 +194,7 @@ function addMarker(location, popupText, color = 'blue') {
     return marker;
 }
 
-function addPoiMarker(location, name, type) {
+function addPoiMarker(place, index, isClosest = false) {
     const typeIcons = {
         'fuel': '⛽',
         'gas': '⛽',
@@ -207,25 +203,48 @@ function addPoiMarker(location, name, type) {
         'parking': '🅿️',
         'hospital': '🏥',
         'pharmacy': '💊',
-        'charging': '🔌'
+        'charging': '🔌',
+        'hotel': '🏨',
+        'supermarket': '🛒'
     };
     
-    const emoji = typeIcons[type] || '📍';
+    const emoji = typeIcons[place.type] || '📍';
+    const bgColor = isClosest ? '#4CAF50' : 'white';
+    const textColor = isClosest ? 'white' : '#333';
     
     const icon = L.divIcon({
         className: 'poi-marker',
         html: `<div style="
-            background: white;
-            padding: 4px 8px;
-            border-radius: 15px;
-            font-size: 14px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            background: ${bgColor};
+            color: ${textColor};
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             white-space: nowrap;
-        ">${emoji} ${name}</div>`,
+            border: 2px solid ${isClosest ? '#4CAF50' : '#ddd'};
+        ">${emoji} ${index + 1}</div>`,
         iconSize: null
     });
     
-    const marker = L.marker(location, { icon }).addTo(map).bindPopup(`<b>${name}</b>`);
+    const marker = L.marker([place.lat, place.lon], { icon })
+        .addTo(map)
+        .bindPopup(`
+            <b>${place.name}</b><br>
+            ${place.distance_text}<br>
+            ${place.address || ''}
+            <br><br>
+            <button onclick="navigateToPlace(${place.lat}, ${place.lon}, '${place.name.replace(/'/g, "\\'")}')">
+                🧭 Navigate
+            </button>
+        `);
+    
+    // Click to select
+    marker.on('click', () => {
+        selectPlace(place, index);
+    });
+    
     poiMarkers.push(marker);
     return marker;
 }
@@ -241,59 +260,201 @@ function clearPoiMarkers() {
 }
 
 // =============================================================================
-// Places / POI Search
+// Places Search with Panel
 // =============================================================================
 
 async function searchNearbyPlaces(placeType) {
-    if (!currentLocation) {
-        showError('Please get your location first');
-        return;
+    if (!window.currentLocation) {
+        showError('Getting your location first...');
+        await useMyLocation();
+        if (!window.currentLocation) {
+            showError('Could not get location');
+            return;
+        }
     }
     
-    clearPoiMarkers();
+    // Update button state
+    const btn = document.getElementById(`btn-${placeType}`);
+    document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+    if (btn) {
+        btn.classList.add('active');
+        btn.disabled = true;
+        btn.innerHTML = `<span class="loading-spinner"></span>`;
+    }
+    
+    // Show panel with loading state
+    showPlacesPanel('Searching...', []);
     
     try {
-        const url = `/api/places/nearby?lat=${currentLocation.lat}&lon=${currentLocation.lon}&type=${placeType}`;
+        const url = `/api/places/nearby?lat=${window.currentLocation.lat}&lon=${window.currentLocation.lon}&type=${placeType}&radius=8000`;
         const response = await fetch(url);
         const data = await response.json();
         
         if (data.ok && data.results && data.results.length > 0) {
-            // Add markers for each result
-            data.results.forEach(place => {
+            // Clear old markers
+            clearPoiMarkers();
+            
+            // Add markers for each place
+            data.results.forEach((place, index) => {
                 if (place.lat && place.lon) {
-                    addPoiMarker([place.lat, place.lon], place.name || 'Unknown', placeType);
+                    addPoiMarker(place, index, index === 0);
                 }
             });
             
-            showSuccess(`Found ${data.results.length} ${placeType} nearby`);
+            // Show panel with results
+            showPlacesPanel(data.type_name || placeType, data.results);
             
-            // If results exist, zoom to fit them
+            // Fit map to show all markers
             if (poiMarkers.length > 0) {
                 const group = new L.featureGroup(poiMarkers);
                 map.fitBounds(group.getBounds().pad(0.1));
             }
+            
         } else {
-            showError(`No ${placeType} found nearby`);
+            showPlacesPanel(data.type_name || placeType, [], 'No places found nearby');
         }
     } catch (error) {
         console.error('Places search error:', error);
-        showError('Failed to search for places');
+        showPlacesPanel(placeType, [], 'Search failed. Try again.');
+    } finally {
+        // Reset button
+        if (btn) {
+            btn.disabled = false;
+            const icons = { fuel: '⛽', restaurant: '🍽️', parking: '🅿️', hospital: '🏥' };
+            const names = { fuel: 'Gas Stations', restaurant: 'Restaurants', parking: 'Parking', hospital: 'Hospitals' };
+            btn.innerHTML = `${icons[placeType] || '📍'} ${names[placeType] || placeType}`;
+        }
     }
 }
 
-// Quick destination button handler
-function setDestination(place) {
-    const destInput = document.getElementById('dest-input');
-    if (destInput) {
-        destInput.value = place + ' nearby';
+function showPlacesPanel(title, places, errorMsg = null) {
+    const panel = document.getElementById('places-panel');
+    const panelTitle = document.getElementById('places-panel-title');
+    const placesCount = document.getElementById('places-count');
+    const placesList = document.getElementById('places-list');
+    
+    panel.classList.add('visible');
+    panelTitle.textContent = title;
+    
+    if (errorMsg) {
+        placesCount.textContent = '';
+        placesList.innerHTML = `
+            <div class="no-results">
+                <div class="no-results-icon">😕</div>
+                <div>${errorMsg}</div>
+            </div>
+        `;
+        return;
     }
     
-    // Also search for places if we have location
-    if (currentLocation) {
-        const placeType = place.toLowerCase().replace(' nearby', '').replace('gas station', 'fuel');
-        searchNearbyPlaces(placeType);
+    if (places.length === 0) {
+        placesCount.textContent = 'Searching...';
+        placesList.innerHTML = `
+            <div class="no-results">
+                <div class="loading-spinner" style="border-top-color: #667eea;"></div>
+            </div>
+        `;
+        return;
+    }
+    
+    placesCount.textContent = `Found ${places.length} nearby`;
+    
+    placesList.innerHTML = places.map((place, index) => `
+        <div class="place-card ${index === 0 ? 'closest' : ''}" 
+             data-index="${index}"
+             onclick="selectPlace(window._places[${index}], ${index})">
+            <div class="place-card-name">
+                ${index + 1}. ${place.name}
+                ${index === 0 ? '<span class="closest-badge">CLOSEST</span>' : ''}
+            </div>
+            <div class="place-card-distance">📍 ${place.distance_text}</div>
+            ${place.address ? `<div class="place-card-address">${place.address}</div>` : ''}
+            <button class="place-card-btn" onclick="event.stopPropagation(); navigateToPlace(${place.lat}, ${place.lon}, '${place.name.replace(/'/g, "\\'")}')">
+                🧭 Navigate Here
+            </button>
+        </div>
+    `).join('');
+    
+    // Store places for click handlers
+    window._places = places;
+}
+
+function closePlacesPanel() {
+    const panel = document.getElementById('places-panel');
+    panel.classList.remove('visible');
+    clearPoiMarkers();
+    document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+    
+    // Recenter on user location
+    if (window.currentLocation) {
+        map.setView([window.currentLocation.lat, window.currentLocation.lon], 14);
     }
 }
+
+function selectPlace(place, index) {
+    selectedPlace = place;
+    
+    // Update card highlighting
+    document.querySelectorAll('.place-card').forEach((card, i) => {
+        card.classList.remove('selected');
+        if (i === index) {
+            card.classList.add('selected');
+        }
+    });
+    
+    // Center map on place
+    map.setView([place.lat, place.lon], 16);
+    
+    // Open popup
+    if (poiMarkers[index]) {
+        poiMarkers[index].openPopup();
+    }
+}
+
+// =============================================================================
+// Navigation to Place
+// =============================================================================
+
+async function navigateToPlace(lat, lon, name) {
+    if (!window.currentLocation) {
+        showError('Please get your location first');
+        return;
+    }
+    
+    showSuccess(`Getting route to ${name}...`);
+    
+    try {
+        const url = `/api/route/to_place?start_lat=${window.currentLocation.lat}&start_lon=${window.currentLocation.lon}&lat=${lat}&lon=${lon}&name=${encodeURIComponent(name)}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.ok || data.success) {
+            // Close places panel
+            closePlacesPanel();
+            
+            // Display route
+            displayRoute(data);
+            
+            // Update destination input
+            const destInput = document.getElementById('dest-input');
+            if (destInput) {
+                destInput.value = name;
+            }
+            
+            // Show route info
+            showRouteInfo(data);
+            
+        } else {
+            showError(data.error || data.message || 'Could not calculate route');
+        }
+    } catch (error) {
+        console.error('Navigation error:', error);
+        showError('Failed to get directions');
+    }
+}
+
+// Make navigateToPlace available globally
+window.navigateToPlace = navigateToPlace;
 
 // =============================================================================
 // UI Helpers
@@ -318,14 +479,19 @@ function showSuccess(message) {
         panel = document.createElement('div');
         panel.id = 'success-panel';
         panel.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
             background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
             color: white;
-            padding: 12px 20px;
-            border-radius: 10px;
-            margin-top: 10px;
-            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+            padding: 12px 24px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.4);
+            z-index: 2000;
+            font-weight: 600;
         `;
-        document.querySelector('.map-controls').appendChild(panel);
+        document.body.appendChild(panel);
     }
     
     panel.innerHTML = `✓ ${message}`;
@@ -350,8 +516,10 @@ function showRouteInfo(data) {
         document.querySelector('.map-controls').appendChild(infoPanel);
     }
     
+    const destName = data.destination_name || 'Destination';
+    
     infoPanel.innerHTML = `
-        <h4 style="margin: 0 0 10px 0; font-size: 1.1em;">🗺️ Route Found!</h4>
+        <h4 style="margin: 0 0 10px 0; font-size: 1.1em;">🧭 Route to ${destName}</h4>
         <div style="display: flex; justify-content: space-between; gap: 20px;">
             <div>
                 <div style="opacity: 0.8; font-size: 0.85em;">Distance</div>
@@ -379,23 +547,25 @@ function showError(message) {
         errorPanel = document.createElement('div');
         errorPanel.id = 'error-panel';
         errorPanel.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
             background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
             color: white;
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-top: 15px;
-            box-shadow: 0 4px 15px rgba(235, 51, 73, 0.3);
+            padding: 12px 24px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(235, 51, 73, 0.4);
+            z-index: 2000;
+            font-weight: 600;
         `;
-        document.querySelector('.map-controls').appendChild(errorPanel);
+        document.body.appendChild(errorPanel);
     }
     
-    errorPanel.innerHTML = `
-        <h4 style="margin: 0 0 5px 0;">⚠️ Error</h4>
-        <p style="margin: 0; opacity: 0.9;">${message}</p>
-    `;
+    errorPanel.innerHTML = `⚠️ ${message}`;
     errorPanel.style.display = 'block';
     
-    setTimeout(() => { errorPanel.style.display = 'none'; }, 5000);
+    setTimeout(() => { errorPanel.style.display = 'none'; }, 4000);
 }
 
 // =============================================================================
@@ -442,17 +612,17 @@ function displayRoute(data) {
         const destination = waypoints[waypoints.length - 1];
         
         const originLabel = data.origin_input || `${origin[0].toFixed(4)}, ${origin[1].toFixed(4)}`;
-        const destLabel = data.destination_input || `${destination[0].toFixed(4)}, ${destination[1].toFixed(4)}`;
+        const destLabel = data.destination_name || data.destination_input || `${destination[0].toFixed(4)}, ${destination[1].toFixed(4)}`;
         
         const originIcon = L.divIcon({
             className: 'custom-marker',
-            html: '<div style="background: #11998e; color: white; padding: 8px 12px; border-radius: 20px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">📍 Start</div>',
+            html: '<div style="background: #11998e; color: white; padding: 8px 14px; border-radius: 20px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">📍 Start</div>',
             iconSize: null
         });
         
         const destIcon = L.divIcon({
             className: 'custom-marker', 
-            html: '<div style="background: #eb3349; color: white; padding: 8px 12px; border-radius: 20px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">🎯 End</div>',
+            html: '<div style="background: #eb3349; color: white; padding: 8px 14px; border-radius: 20px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">🎯 ' + (destLabel.length > 20 ? destLabel.substring(0, 20) + '...' : destLabel) + '</div>',
             iconSize: null
         });
         
@@ -462,8 +632,7 @@ function displayRoute(data) {
         routeLayer = L.polyline(waypoints, {
             color: '#667eea',
             weight: 6,
-            opacity: 0.8,
-            dashArray: '10, 10'
+            opacity: 0.9
         }).addTo(map);
         
         map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
@@ -503,6 +672,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Make functions available globally for inline onclick handlers
-window.setDestination = setDestination;
+// Make functions available globally
 window.searchNearbyPlaces = searchNearbyPlaces;
+window.closePlacesPanel = closePlacesPanel;
+window.selectPlace = selectPlace;

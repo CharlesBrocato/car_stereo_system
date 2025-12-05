@@ -693,42 +693,79 @@ def pi_location():
 
 @app.route('/api/location/current')
 def current_location():
-    """Get best available location (phone -> Pi -> default)"""
+    """
+    Get best available location.
+    
+    Priority:
+    1. Connected phone (via Bluetooth) - if sharing location
+    2. GPS (if connected to Pi)
+    3. WiFi-based Google Geolocation (~20-50m accuracy)
+    4. IP-based geolocation (~5km accuracy)
+    5. Default coordinates
+    
+    Returns:
+        JSON: { lat, lng, accuracy, source }
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         # Try phone location first (using PhoneLocation for iPhone/Android)
         from modules.phone_location import PhoneLocation
         phone_loc = PhoneLocation.get_location()
         if phone_loc:
+            logger.info(f"Location from phone: {phone_loc['lat']}, {phone_loc['lon']}")
             return jsonify({
                 "ok": True,
                 "lat": phone_loc["lat"],
-                "lon": phone_loc["lon"],
-                "accuracy": phone_loc.get("accuracy"),
+                "lng": phone_loc["lon"],
+                "lon": phone_loc["lon"],  # Keep for backwards compatibility
+                "accuracy": phone_loc.get("accuracy", 10),
                 "source": phone_loc.get("source", "phone"),
                 "device_type": bluetooth.connected_device_type
             })
         
-        # Try Pi location (GPS or IP)
+        # Try Pi location (GPS -> WiFi -> IP)
+        # This now uses WiFi-based Google Geolocation as primary method
         from modules.location_module import PiLocation
         pi_loc = PiLocation.get()
         if pi_loc:
+            source = pi_loc.get("source", "pi")
+            accuracy = pi_loc.get("accuracy", 5000)
+            wifi_count = pi_loc.get("wifi_count", 0)
+            
+            # Log location source details
+            if source == "wifi_google":
+                logger.info(f"WiFi location: {pi_loc['lat']}, {pi_loc['lon']} (±{accuracy}m, {wifi_count} networks)")
+            elif source == "gps":
+                logger.info(f"GPS location: {pi_loc['lat']}, {pi_loc['lon']} (±{accuracy}m)")
+            elif source == "ip_fallback":
+                logger.warning(f"IP fallback location: {pi_loc['lat']}, {pi_loc['lon']} (±{accuracy}m)")
+            
             return jsonify({
                 "ok": True,
                 "lat": pi_loc["lat"],
-                "lon": pi_loc["lon"],
-                "source": pi_loc.get("source", "pi"),
-                "city": pi_loc.get("city", "")
+                "lng": pi_loc["lon"],
+                "lon": pi_loc["lon"],  # Keep for backwards compatibility
+                "accuracy": accuracy,
+                "source": source,
+                "city": pi_loc.get("city", ""),
+                "wifi_count": wifi_count
             })
         
         # Fallback to default location
+        logger.warning("All location methods failed, using default")
         return jsonify({
             "ok": True,
             "lat": 43.6532,
+            "lng": -79.3832,
             "lon": -79.3832,
+            "accuracy": 100000,
             "source": "default"
         })
     except Exception as e:
-        return jsonify({"ok": False, "message": str(e)})
+        logger.error(f"Location error: {e}")
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @app.route('/api/location/accurate')

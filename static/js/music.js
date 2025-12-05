@@ -143,8 +143,11 @@ async function fetchMediaStatus() {
             isPlaying = data.is_playing;
             
             // Update play/pause button icon
-            if (playPauseBtn) {
-                playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
+            const playIcon = document.getElementById('play-icon');
+            if (playIcon) {
+                playIcon.textContent = isPlaying ? 'PAUSE' : 'PLAY';
+            } else if (playPauseBtn) {
+                playPauseBtn.textContent = isPlaying ? 'PAUSE' : 'PLAY';
             }
             
             // Update track info
@@ -162,8 +165,11 @@ async function fetchMediaStatus() {
             
         } else {
             // No media player available
-            if (playPauseBtn) {
-                playPauseBtn.textContent = '▶';
+            const playIcon = document.getElementById('play-icon');
+            if (playIcon) {
+                playIcon.textContent = 'PLAY';
+            } else if (playPauseBtn) {
+                playPauseBtn.textContent = 'PLAY';
             }
             
             // Update connection indicator to show not connected

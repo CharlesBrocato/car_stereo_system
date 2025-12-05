@@ -48,13 +48,13 @@ async function updateStatus() {
         const statusIndicator = document.getElementById('status-indicator');
         if (statusIndicator) {
             if (data.music_playing) {
-                statusIndicator.textContent = '🎵 Playing';
+                statusIndicator.textContent = 'PLAYING';
                 statusIndicator.style.color = '#4CAF50';
             } else if (data.bluetooth_connected) {
-                statusIndicator.textContent = '📶 Connected';
+                statusIndicator.textContent = 'CONNECTED';
                 statusIndicator.style.color = '#2196F3';
             } else {
-                statusIndicator.textContent = '● Ready';
+                statusIndicator.textContent = 'READY';
                 statusIndicator.style.color = '#666';
             }
         }
@@ -101,7 +101,7 @@ function startVoice() {
                 voiceActive = true;
                 const btn = document.getElementById('voiceBtn');
                 if (btn) {
-                    btn.textContent = '🎤 Voice Active';
+                    btn.textContent = 'LISTENING...';
                     btn.classList.add('active');
                 }
                 console.log('Voice control activated');
@@ -121,7 +121,7 @@ function stopVoice() {
                 voiceActive = false;
                 const btn = document.getElementById('voiceBtn');
                 if (btn) {
-                    btn.textContent = '🎤 Voice Control';
+                    btn.textContent = 'VOICE';
                     btn.classList.remove('active');
                 }
                 console.log('Voice control stopped');

@@ -8,6 +8,63 @@
     {% if platform and 'arm' in platform %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/pi.css') }}">
     {% endif %}
+    <style>
+        /* Music control button styling for Pi compatibility */
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .control-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            font-size: 0.9em;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .control-btn.play-pause {
+            width: 90px;
+            height: 90px;
+            font-size: 1em;
+            background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%);
+            box-shadow: 0 4px 20px rgba(76, 175, 80, 0.4);
+        }
+        
+        .placeholder-art {
+            width: 150px;
+            height: 150px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 0 auto 20px auto;
+        }
+        
+        .icon-text {
+            font-family: Arial, sans-serif;
+        }
+    </style>
 </head>
 <body class="music-screen" data-platform="{{ platform or '' }}">
     <div class="container">
@@ -24,7 +81,7 @@
             
             <div class="now-playing">
                 <div class="album-art">
-                    <div class="placeholder-art" id="album-art">🎵</div>
+                    <div class="placeholder-art" id="album-art">MUSIC</div>
                 </div>
                 <div class="track-info">
                     <h2 id="track-title">No track playing</h2>
@@ -33,9 +90,15 @@
             </div>
             
             <div class="controls">
-                <button id="prev-btn" class="control-btn">⏮</button>
-                <button id="play-pause-btn" class="control-btn play-pause">▶</button>
-                <button id="next-btn" class="control-btn">⏭</button>
+                <button id="prev-btn" class="control-btn" aria-label="Previous">
+                    <span class="icon-text">PREV</span>
+                </button>
+                <button id="play-pause-btn" class="control-btn play-pause" aria-label="Play/Pause">
+                    <span class="icon-text" id="play-icon">PLAY</span>
+                </button>
+                <button id="next-btn" class="control-btn" aria-label="Next">
+                    <span class="icon-text">NEXT</span>
+                </button>
             </div>
             
             <div class="volume-control">

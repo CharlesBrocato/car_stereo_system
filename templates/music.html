@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Music Player</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    {% if platform and 'arm' in platform %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pi.css') }}">
+    {% endif %}
 </head>
-<body class="music-screen">
+<body class="music-screen" data-platform="{{ platform or '' }}">
     <div class="container">
         <header>
             <a href="/" class="back-button">← Back</a>
@@ -50,6 +53,9 @@
     </div>
     
     <script src="{{ url_for('static', filename='js/music.js') }}"></script>
+    {% if platform and 'arm' in platform %}
+    <script src="{{ url_for('static', filename='js/pi-touch.js') }}"></script>
+    {% endif %}
 </body>
 </html>
 

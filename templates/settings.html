@@ -5,8 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Settings</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    {% if platform and 'arm' in platform %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pi.css') }}">
+    {% endif %}
 </head>
-<body class="settings-screen">
+<body class="settings-screen" data-platform="{{ platform or '' }}">
     <div class="container">
         <header>
             <a href="/" class="back-button">← Back</a>
@@ -73,6 +76,9 @@
     </div>
     
     <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+    {% if platform and 'arm' in platform %}
+    <script src="{{ url_for('static', filename='js/pi-touch.js') }}"></script>
+    {% endif %}
 </body>
 </html>
 

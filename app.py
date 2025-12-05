@@ -260,27 +260,27 @@ def ios_bridge():
 @app.route('/music')
 def music_screen():
     """Music player screen"""
-    return render_template('music.html')
+    return render_template('music.html', platform=platform.machine())
 
 @app.route('/map')
 def map_screen():
     """Map navigation screen"""
-    return render_template('map.html')
+    return render_template('map.html', platform=platform.machine())
 
 @app.route('/android_auto')
 def android_auto_screen():
     """Android Auto screen"""
-    return render_template('android_auto.html')
+    return render_template('android_auto.html', platform=platform.machine())
 
 @app.route('/settings')
 def settings_screen():
     """Settings screen"""
-    return render_template('settings.html')
+    return render_template('settings.html', platform=platform.machine())
 
 @app.route('/phone')
 def phone_screen():
     """Phone/Bluetooth Calls screen"""
-    return render_template('phone.html')
+    return render_template('phone.html', platform=platform.machine())
 
 @app.route('/iphone_nav', methods=['GET'])
 def iphone_nav():

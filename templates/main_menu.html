@@ -38,7 +38,7 @@
         }
     </style>
 </head>
-<body class="main-menu">
+<body class="main-menu" data-platform="{{ platform or '' }}">
     <div class="container">
         <header>
             <h1>Car Stereo System</h1>
@@ -104,5 +104,8 @@
     </div>
     
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% if platform and 'arm' in platform %}
+    <script src="{{ url_for('static', filename='js/pi-touch.js') }}"></script>
+    {% endif %}
 </body>
 </html>

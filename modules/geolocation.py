@@ -61,11 +61,12 @@ def scan_wifi_networks():
     access_points = {}
     
     # Try different scan commands
+    # Order: non-sudo first (if permissions granted), then sudo
     scan_commands = [
-        ["sudo", "iw", "dev", "wlan0", "scan"],
         ["iw", "dev", "wlan0", "scan"],
-        ["sudo", "iwlist", "wlan0", "scan"],
-        ["iwlist", "wlan0", "scan"]
+        ["sudo", "-n", "iw", "dev", "wlan0", "scan"],  # -n = non-interactive (no password prompt)
+        ["iwlist", "wlan0", "scan"],
+        ["sudo", "-n", "iwlist", "wlan0", "scan"],
     ]
     
     scan_output = None

@@ -89,6 +89,44 @@ python3 -c "import flask" 2>/dev/null || {
 }
 
 # =============================================================================
+# WiFi Scan Permission (for Google Geolocation)
+# =============================================================================
+
+setup_wifi_permission() {
+    # Check if iw can scan without sudo
+    if iw dev wlan0 scan 2>/dev/null | head -1 | grep -q "BSS"; then
+        echo -e "${GREEN}✓ WiFi scanning already enabled${NC}"
+        return 0
+    fi
+    
+    # Try to grant capability to iw
+    IW_PATH=$(which iw 2>/dev/null)
+    if [[ -n "$IW_PATH" ]]; then
+        echo -e "${YELLOW}🔐 Granting WiFi scan permission (requires sudo once)...${NC}"
+        if sudo setcap cap_net_admin+ep "$IW_PATH" 2>/dev/null; then
+            echo -e "${GREEN}✓ WiFi scan permission granted${NC}"
+            return 0
+        fi
+    fi
+    
+    # If that failed, we'll need to run the scan commands with sudo
+    # Check if user can sudo without password for iw
+    if sudo -n iw dev wlan0 scan 2>/dev/null | head -1 | grep -q "BSS"; then
+        echo -e "${GREEN}✓ WiFi scanning via sudo${NC}"
+        return 0
+    fi
+    
+    echo -e "${YELLOW}⚠️  WiFi scanning may require manual setup${NC}"
+    echo -e "   Run: ${CYAN}sudo setcap cap_net_admin+ep \$(which iw)${NC}"
+    echo -e "   Or add to sudoers: ${CYAN}$USER ALL=(ALL) NOPASSWD: /usr/sbin/iw${NC}"
+    return 1
+}
+
+echo ""
+echo -e "${YELLOW}🛜 Setting up WiFi geolocation...${NC}"
+setup_wifi_permission
+
+# =============================================================================
 # Parse command line arguments
 # =============================================================================
 

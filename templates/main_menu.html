@@ -35,6 +35,27 @@
         .menu-item.iphone-nav .icon { background: linear-gradient(135deg, #007AFF, #5856D6); color: white; }
         .menu-item.phone .icon { background: linear-gradient(135deg, #4CAF50, #2E7D32); color: white; }
         .menu-item.settings .icon { background: linear-gradient(135deg, #607D8B, #455A64); color: white; }
+        
+        /* Clean 4-item grid layout */
+        .menu-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .menu-grid-4 .menu-item {
+            padding: 25px 20px;
+        }
+        
+        @media (min-width: 600px) {
+            .menu-grid-4 {
+                grid-template-columns: repeat(4, 1fr);
+                max-width: 900px;
+            }
+        }
     </style>
 </head>
 <body class="main-menu" data-platform="{{ platform or '' }}">
@@ -50,7 +71,7 @@
             </div>
         </header>
         
-        <main class="menu-grid">
+        <main class="menu-grid menu-grid-4">
             <a href="/music" class="menu-item music">
                 <div class="icon">MUSIC</div>
                 <h2>Music</h2>
@@ -69,6 +90,13 @@
                 <p>Phone Integration</p>
             </a>
             
+            <a href="/settings" class="menu-item settings">
+                <div class="icon">SET</div>
+                <h2>Settings</h2>
+                <p>Configuration</p>
+            </a>
+            
+            <!-- Hidden for clean UI - backend still available
             <a href="/ios_bridge" class="menu-item ios-bridge">
                 <div class="icon">GPS</div>
                 <h2>iPhone GPS</h2>
@@ -86,12 +114,7 @@
                 <h2>Phone</h2>
                 <p>Bluetooth Calls</p>
             </a>
-            
-            <a href="/settings" class="menu-item settings">
-                <div class="icon">SET</div>
-                <h2>Settings</h2>
-                <p>Configuration</p>
-            </a>
+            -->
         </main>
         
         <footer>
